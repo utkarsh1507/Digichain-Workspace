@@ -1,4 +1,13 @@
-const BASE = import.meta.env.VITE_API_URL || '/api';
+function normalizeApiBase(value) {
+  if (!value) return '/api';
+
+  const trimmed = value.trim().replace(/\/+$/, '');
+  if (trimmed === '/api' || trimmed.endsWith('/api')) return trimmed;
+
+  return `${trimmed}/api`;
+}
+
+const BASE = normalizeApiBase(import.meta.env.VITE_API_URL);
 
 function getToken() {
   return localStorage.getItem('dw_token');
