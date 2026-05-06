@@ -456,8 +456,8 @@ export default function Messages() {
                   const isDeletingMessage = deletingMessageId === m.id;
 
                   return (
-                    <div key={m.id} style={{ display: 'flex', flexDirection: 'column',
-                      alignItems: isMe ? 'flex-end' : 'flex-start', marginTop: grouped ? 2 : 12 }}>
+                    <div key={m.id} className="message-row" style={{ display: 'flex', flexDirection: 'column',
+                      alignItems: isMe ? 'flex-end' : 'flex-start', marginTop: grouped ? 2 : 12, position: 'relative' }}>
                       <div style={{ display: 'flex', gap: 10, justifyContent: isMe ? 'flex-end' : 'flex-start',
                         position: 'relative', width: '100%' }}>
                         {!isMe && (
@@ -466,6 +466,60 @@ export default function Messages() {
                           </div>
                         )}
                         <div style={{ maxWidth: '68%', display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start', gap: 2, position: 'relative' }}>
+                          <div
+                            className={`message-actions${pickerOpen ? ' is-open' : ''}`}
+                            style={{
+                              position: 'absolute',
+                              top: grouped || isMe ? 0 : 20,
+                              [isMe ? 'right' : 'left']: '100%',
+                              marginRight: isMe ? 6 : 0,
+                              marginLeft: isMe ? 0 : 6,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4,
+                              padding: 3,
+                              borderRadius: 999,
+                              background: '#fff',
+                              border: '1px solid var(--border-1)',
+                              boxShadow: 'var(--shadow-xs)',
+                              zIndex: 10,
+                            }}>
+                            <button
+                              className="message-action-btn"
+                              onClick={(e) => { e.stopPropagation(); setPickerForMsgId(pickerOpen ? null : m.id); }}
+                              style={{
+                                width: 26, height: 26, borderRadius: '50%',
+                                background: pickerOpen ? 'var(--accent-tint)' : 'transparent',
+                                border: 'none',
+                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                cursor: 'pointer', color: pickerOpen ? 'var(--accent)' : 'var(--fg-3)',
+                              }}
+                              title="Add reaction"
+                              aria-label="Add reaction">
+                              <Smile size={14} />
+                            </button>
+                            {canDeleteMessage && (
+                              <button
+                                className="message-action-btn"
+                                onClick={() => handleDeleteMessage(m.id)}
+                                disabled={isDeletingMessage}
+                                style={{
+                                  width: 26, height: 26, borderRadius: '50%',
+                                  background: 'transparent',
+                                  border: 'none',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  cursor: isDeletingMessage ? 'not-allowed' : 'pointer',
+                                  color: '#ad2236',
+                                  opacity: isDeletingMessage ? 0.55 : 1,
+                                }}
+                                title={isDeletingMessage ? 'Deleting message' : 'Delete message'}
+                                aria-label={isDeletingMessage ? 'Deleting message' : 'Delete message'}>
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
                           {!grouped && !isMe && (
                             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                               <span style={{ fontSize: 12, fontWeight: 600 }}>{senderName}</span>
@@ -531,9 +585,10 @@ export default function Messages() {
                             </span>
                           )}
 
-                          {/* Reactions and trigger */}
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4, alignItems: 'center' }}>
-                            {(m.reactions || []).filter(r => r.userIds.length > 0).map(r => (
+                          {/* Reactions */}
+                          {(m.reactions || []).some(r => r.userIds.length > 0) && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4, alignItems: 'center' }}>
+                              {(m.reactions || []).filter(r => r.userIds.length > 0).map(r => (
                               <button key={r.emoji} onClick={() => handleReact(m.id, r.emoji)}
                                 style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px',
                                   borderRadius: 999, border: '1px solid var(--border-1)',
@@ -542,44 +597,9 @@ export default function Messages() {
                                   color: r.userIds.includes(currentUser?.id) ? 'var(--accent-press)' : 'var(--fg-2)' }}>
                                 {r.emoji} {r.userIds.length}
                               </button>
-                            ))}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setPickerForMsgId(pickerOpen ? null : m.id); }}
-                              style={{
-                                width: 28, height: 28, borderRadius: '50%',
-                                background: '#fff', border: '1px solid var(--border-1)',
-                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                                cursor: 'pointer', color: pickerOpen ? 'var(--accent)' : 'var(--fg-3)',
-                                boxShadow: pickerOpen ? 'var(--shadow-xs)' : 'none',
-                              }}
-                              title="Add reaction">
-                              <Smile size={14} />
-                            </button>
-                            {canDeleteMessage && (
-                              <button
-                                onClick={() => handleDeleteMessage(m.id)}
-                                disabled={isDeletingMessage}
-                                style={{
-                                  height: 28,
-                                  padding: '0 10px',
-                                  borderRadius: 999,
-                                  background: '#fff',
-                                  border: '1px solid var(--border-1)',
-                                  display: 'inline-flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  cursor: isDeletingMessage ? 'not-allowed' : 'pointer',
-                                  color: '#ad2236',
-                                  opacity: isDeletingMessage ? 0.6 : 1,
-                                  fontSize: 11,
-                                  fontWeight: 700,
-                                  fontFamily: 'inherit',
-                                }}
-                                title="Delete message">
-                                {isDeletingMessage ? 'Deleting...' : 'Delete'}
-                              </button>
-                            )}
-                          </div>
+                              ))}
+                            </div>
+                          )}
 
                           {/* Reaction picker popover — positioned BELOW the bubble */}
                           {pickerOpen && (
@@ -655,6 +675,22 @@ export default function Messages() {
                 </div>
               )}
               <style>{`
+                .message-actions {
+                  opacity: 0;
+                  transform: translateY(2px);
+                  pointer-events: none;
+                  transition: opacity 140ms ease, transform 140ms ease;
+                }
+                .message-row:hover .message-actions,
+                .message-row:focus-within .message-actions,
+                .message-actions.is-open {
+                  opacity: 1;
+                  transform: translateY(0);
+                  pointer-events: auto;
+                }
+                .message-action-btn:hover {
+                  background: var(--bg-2) !important;
+                }
                 @keyframes typingBounce {
                   0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
                   30% { transform: translateY(-5px); opacity: 1; }
