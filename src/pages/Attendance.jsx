@@ -15,7 +15,29 @@ function calcHours(signIn, signOut) {
 function nowTime() {
   return new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
 }
-function todayDate() { return new Date().toISOString().split('T')[0]; }
+function getIstParts(date = new Date()) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      hourCycle: 'h23',
+    }).formatToParts(date).map((part) => [part.type, part.value])
+  );
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    minutes: Number(parts.hour) * 60 + Number(parts.minute),
+  };
+}
+function todayDate() { return getIstParts().date; }
+function isAttendanceWindow(date = new Date()) {
+  const { minutes } = getIstParts(date);
+  return minutes >= 9 * 60 && minutes <= 19 * 60;
+}
 
 function LiveClock() {
   const [time, setTime] = useState(new Date());
@@ -23,7 +45,7 @@ function LiveClock() {
   return (
     <span style={{ fontFamily: 'var(--font-mono)', fontSize: 52, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1 }}
       className="text-gradient">
-      {time.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
+      {time.toLocaleTimeString('en-IN', { timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })}
     </span>
   );
 }
@@ -34,8 +56,15 @@ export default function Attendance() {
   const isFounder = currentUser?.role === 'founder';
   const [tab, setTab] = useState(isFounder ? 'team' : 'mine');
   const [busy, setBusy] = useState(false);
+  const [clockTick, setClockTick] = useState(new Date());
+
+  useEffect(() => {
+    const t = setInterval(() => setClockTick(new Date()), 30 * 1000);
+    return () => clearInterval(t);
+  }, []);
 
   const today = todayDate();
+  const attendanceOpen = isAttendanceWindow(clockTick);
   // todayAttendance is the server-loaded today record
   const todayRecord = todayAttendance;
   // Active session = signed in but not yet signed out
@@ -101,17 +130,19 @@ export default function Attendance() {
                 ? `Signed in at ${todaySession.signIn} · ${todaySession.location}`
                 : todayRecord
                 ? `Worked ${todayRecord.hours} · Signed out at ${todayRecord.signOut}`
-                : 'Click "Sign in" to start tracking your hours.'}
+                : attendanceOpen
+                ? 'Click "Sign in" to start tracking your hours.'
+                : 'Sign in and sign out are available from 9:00 AM to 7:00 PM IST.'}
             </div>
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
             {!todayRecord && !todaySession && (
-              <Button variant="gradient" size="lg" icon={LogIn} onClick={handleSignIn} disabled={busy}>
+              <Button variant="gradient" size="lg" icon={LogIn} onClick={handleSignIn} disabled={busy || !attendanceOpen}>
                 {busy ? 'Signing in…' : 'Sign in'}
               </Button>
             )}
             {todaySession && (
-              <Button variant="secondary" size="lg" icon={LogOut} onClick={handleSignOut} disabled={busy}>
+              <Button variant="secondary" size="lg" icon={LogOut} onClick={handleSignOut} disabled={busy || !attendanceOpen}>
                 {busy ? 'Signing out…' : 'Sign out'}
               </Button>
             )}
