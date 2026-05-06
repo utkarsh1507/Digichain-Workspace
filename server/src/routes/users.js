@@ -6,6 +6,7 @@ const { uploadAvatar } = require('../lib/cloudinary');
 const { broadcast } = require('../lib/events');
 const prisma = new PrismaClient();
 const PASSWORD_MIN_LENGTH = 10;
+const STATUS_PRESETS = new Set(['working', 'on-break', 'on-leave', 'busy', 'custom']);
 
 function normalizeEmail(email) {
   return typeof email === 'string' ? email.trim().toLowerCase() : '';
@@ -26,6 +27,21 @@ router.get('/', auth, async (req, res) => {
   try {
     const users = await prisma.user.findMany({ orderBy: { createdAt: 'asc' } });
     res.json(users.map(({ password, ...u }) => u));
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/users/presence - refresh own activity timestamp
+router.post('/presence', auth, async (req, res) => {
+  try {
+    const user = await prisma.user.update({
+      where: { id: req.user.id },
+      data: { lastActiveAt: new Date() },
+    });
+    const { password, ...safeUser } = user;
+    broadcast('user:update', safeUser);
+    res.json(safeUser);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -89,6 +105,12 @@ router.patch('/:id', auth, async (req, res) => {
     if (data.name !== undefined) data.name = data.name?.trim();
     if (data.title !== undefined) data.title = data.title?.trim();
     if (data.phone !== undefined) data.phone = data.phone?.trim() || null;
+    if (data.statusPreset !== undefined && !STATUS_PRESETS.has(data.statusPreset)) {
+      return res.status(400).json({ error: 'Invalid status' });
+    }
+    if (data.statusMessage !== undefined) {
+      data.statusMessage = data.statusMessage?.trim().slice(0, 80) || null;
+    }
     const user = await prisma.user.update({ where: { id: req.params.id }, data });
     const { password: _, ...safeUser } = user;
     broadcast('user:update', safeUser);
