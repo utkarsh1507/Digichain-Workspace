@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
+const { broadcast } = require('../lib/events');
 const prisma = new PrismaClient();
 
 // GET /api/announcements
@@ -24,7 +25,10 @@ router.post('/', auth, async (req, res) => {
       data: { title, content, category: category || 'General', pinned: pinned || false, authorId: req.user.id },
       include: { author: { select: { id: true, name: true, avatar: true, title: true } } }
     });
-    res.json({ ...announcement, reactions: [] });
+    const payload = { ...announcement, reactions: [] };
+    // Broadcast to everyone — announcements are company-wide
+    broadcast('announcement:new', payload);
+    res.json(payload);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -44,7 +48,9 @@ router.patch('/:id', auth, async (req, res) => {
       data: { title, content, category, pinned },
       include: { author: { select: { id: true, name: true, avatar: true, title: true } } }
     });
-    res.json({ ...updated, reactions: JSON.parse(updated.reactions || '[]') });
+    const payload = { ...updated, reactions: JSON.parse(updated.reactions || '[]') };
+    broadcast('announcement:update', payload);
+    res.json(payload);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -59,6 +65,7 @@ router.delete('/:id', auth, async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
     await prisma.announcement.delete({ where: { id: req.params.id } });
+    broadcast('announcement:delete', { id: req.params.id });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -90,7 +97,9 @@ router.post('/:id/react', auth, async (req, res) => {
       data: { reactions: JSON.stringify(reactions) },
       include: { author: { select: { id: true, name: true, avatar: true, title: true } } }
     });
-    res.json({ ...updated, reactions });
+    const payload = { ...updated, reactions };
+    broadcast('announcement:update', payload);
+    res.json(payload);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }

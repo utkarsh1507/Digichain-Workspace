@@ -1,8 +1,10 @@
 import { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState } from 'react';
 import {
   authApi, usersApi, attendanceApi, leavesApi, tasksApi,
-  messagesApi, announcementsApi, documentsApi, meetingsApi
+  messagesApi, announcementsApi, documentsApi, meetingsApi,
+  API_BASE,
 } from '../api/index.js';
+import { notify } from '../utils/notifications.js';
 
 const AppContext = createContext(null);
 
@@ -18,6 +20,7 @@ const initialState = {
   channelMessages: {},     // { [channelId]: Message[] }
   channelSeenBy: {},       // { [channelId]: { userId: ISOString } }
   unreadCounts: {},        // { [channelId]: number }
+  typingByChannel: {},     // { [channelId]: { [userId]: { name, timestamp } } }
   announcements: [],
   documents: [],
   meetings: [],
@@ -50,8 +53,41 @@ function reducer(state, action) {
     case 'SET_UNREAD_COUNTS':
       return { ...state, unreadCounts: action.counts };
 
+    case 'BUMP_UNREAD':
+      return {
+        ...state,
+        unreadCounts: {
+          ...state.unreadCounts,
+          [action.channelId]: (state.unreadCounts[action.channelId] || 0) + 1,
+        },
+      };
+
     case 'CLEAR_UNREAD':
       return { ...state, unreadCounts: { ...state.unreadCounts, [action.channelId]: 0 } };
+
+    case 'SET_TYPING':
+      return {
+        ...state,
+        typingByChannel: {
+          ...state.typingByChannel,
+          [action.channelId]: {
+            ...(state.typingByChannel[action.channelId] || {}),
+            [action.userId]: { name: action.name, timestamp: action.timestamp },
+          },
+        },
+      };
+
+    case 'CLEAR_TYPING':
+      return {
+        ...state,
+        typingByChannel: {
+          ...state.typingByChannel,
+          [action.channelId]: Object.fromEntries(
+            Object.entries(state.typingByChannel[action.channelId] || {})
+              .filter(([uid]) => uid !== action.userId)
+          ),
+        },
+      };
 
     case 'UPDATE_SEEN_BY':
       return {
@@ -207,54 +243,193 @@ export function AppProvider({ children }) {
       });
   }, [loadAppData]);
 
-  // ── Notification polling (every 12s) ─────────────────────────────────────────
+  // ── Real-time via Server-Sent Events ─────────────────────────────────────────
+  // `activeChannelIdRef` is set by the Messages page so we know which channel
+  // the user is currently looking at — incoming messages for that channel
+  // shouldn't fire a toast/sound (the user is already seeing them).
+  const activeChannelIdRef = useRef(null);
+  const setActiveChannel = useCallback((id) => { activeChannelIdRef.current = id; }, []);
+
   useEffect(() => {
     if (!state.currentUser) return;
+    const token = localStorage.getItem('dw_token');
+    if (!token) return;
 
-    const poll = async () => {
+    let es = null;
+    let reconnectTimer = null;
+    let stopped = false;
+
+    function connect() {
       try {
-        // Poll unread message counts
-        const newCounts = await messagesApi.getUnread();
-        const prev = prevUnreadRef.current;
-        let hasNewMsg = false;
-        let newMsgCount = 0;
-        Object.entries(newCounts).forEach(([chId, count]) => {
-          const prevCount = prev[chId] || 0;
-          if (count > prevCount) {
-            hasNewMsg = true;
-            newMsgCount += count - prevCount;
+        es = new EventSource(`${API_BASE}/events?token=${encodeURIComponent(token)}`);
+      } catch {
+        return;
+      }
+
+      es.addEventListener('connected', () => {
+        // connection established — nothing to do
+      });
+
+      es.addEventListener('message:new', (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          dispatch({ type: 'ADD_MESSAGE', channelId: msg.channelId, message: msg });
+
+          const senderId = msg.senderId || msg.sender?.id;
+          const isMine = senderId === state.currentUser.id;
+          const isActive = activeChannelIdRef.current === msg.channelId;
+
+          if (!isMine) {
+            // bump unread count for that channel
+            dispatch({ type: 'BUMP_UNREAD', channelId: msg.channelId });
+
+            if (!isActive) {
+              const senderName = msg.sender?.name || 'Someone';
+              const preview = msg.text
+                ? msg.text.slice(0, 90)
+                : (msg.attachmentName ? `📎 ${msg.attachmentName}` : 'New message');
+              addToast({
+                type: 'message',
+                title: senderName,
+                body: preview,
+                path: '/messages',
+              });
+              notify({
+                kind: 'message',
+                title: senderName,
+                body: preview,
+                tag: `msg:${msg.channelId}`,
+              });
+            }
           }
-        });
-        if (hasNewMsg) {
-          addToast({
-            type: 'message',
-            title: 'New Messages',
-            body: `You have ${newMsgCount} new message${newMsgCount > 1 ? 's' : ''}`,
-            path: '/messages',
-          });
-        }
-        prevUnreadRef.current = newCounts;
-        dispatch({ type: 'SET_UNREAD_COUNTS', counts: newCounts });
+        } catch {}
+      });
 
-        // Poll announcements for new ones
-        const latestAnn = await announcementsApi.list();
-        const prevCount = prevAnnouncementCountRef.current;
-        if (latestAnn.length > prevCount && prevCount > 0) {
-          const newest = latestAnn[0];
-          addToast({
-            type: 'announcement',
-            title: newest.title,
-            body: newest.content?.slice(0, 80) + (newest.content?.length > 80 ? '…' : ''),
-            path: '/announcements',
+      es.addEventListener('message:update', (e) => {
+        try {
+          const msg = JSON.parse(e.data);
+          dispatch({ type: 'UPDATE_MESSAGE', channelId: msg.channelId, message: msg });
+        } catch {}
+      });
+
+      es.addEventListener('channel:new', (e) => {
+        try {
+          const ch = JSON.parse(e.data);
+          dispatch({ type: 'ADD_CHANNEL', channel: ch });
+        } catch {}
+      });
+
+      es.addEventListener('channel:read', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          dispatch({
+            type: 'UPDATE_SEEN_BY',
+            channelId: data.channelId,
+            userId: data.userId,
+            ts: data.lastReadAt,
           });
-          dispatch({ type: 'SET_ANNOUNCEMENTS', announcements: latestAnn });
-        }
-        prevAnnouncementCountRef.current = latestAnn.length;
-      } catch {}
+        } catch {}
+      });
+
+      es.addEventListener('channel:typing', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          dispatch({
+            type: 'SET_TYPING',
+            channelId: data.channelId,
+            userId: data.userId,
+            name: data.name,
+            timestamp: data.timestamp,
+          });
+        } catch {}
+      });
+
+      es.addEventListener('announcement:new', (e) => {
+        try {
+          const ann = JSON.parse(e.data);
+          dispatch({ type: 'ADD_ANNOUNCEMENT', ann });
+          if (ann.authorId !== state.currentUser.id) {
+            const body = ann.content?.slice(0, 90) + (ann.content?.length > 90 ? '…' : '');
+            addToast({
+              type: 'announcement',
+              title: `📣 ${ann.title}`,
+              body,
+              path: '/announcements',
+            });
+            notify({
+              kind: 'announcement',
+              title: `📣 ${ann.title}`,
+              body,
+              tag: `ann:${ann.id}`,
+            });
+          }
+        } catch {}
+      });
+
+      es.addEventListener('announcement:update', (e) => {
+        try {
+          const ann = JSON.parse(e.data);
+          dispatch({ type: 'UPDATE_ANNOUNCEMENT', ann });
+        } catch {}
+      });
+
+      es.addEventListener('announcement:delete', (e) => {
+        try {
+          const { id } = JSON.parse(e.data);
+          dispatch({ type: 'REMOVE_ANNOUNCEMENT', id });
+        } catch {}
+      });
+
+      es.addEventListener('meeting:new', (e) => {
+        try {
+          const meeting = JSON.parse(e.data);
+          dispatch({ type: 'ADD_MEETING', meeting });
+          if (meeting.organizerId !== state.currentUser.id) {
+            addToast({
+              type: 'announcement',
+              title: '📅 Meeting scheduled',
+              body: `${meeting.title} — ${meeting.date} at ${meeting.time}`,
+              path: '/meetings',
+            });
+            notify({
+              kind: 'announcement',
+              title: 'New meeting scheduled',
+              body: `${meeting.title} — ${meeting.date} at ${meeting.time}`,
+              tag: `meet:${meeting.id}`,
+            });
+          }
+        } catch {}
+      });
+
+      es.addEventListener('meeting:update', (e) => {
+        try {
+          const meeting = JSON.parse(e.data);
+          dispatch({ type: 'UPDATE_MEETING', meeting });
+        } catch {}
+      });
+
+      es.addEventListener('meeting:delete', (e) => {
+        try {
+          const { id } = JSON.parse(e.data);
+          dispatch({ type: 'REMOVE_MEETING', id });
+        } catch {}
+      });
+
+      es.onerror = () => {
+        // EventSource auto-reconnects, but if the server kills it (e.g. on logout)
+        // we close + retry after a delay.
+        if (stopped) return;
+        try { es.close(); } catch {}
+        reconnectTimer = setTimeout(() => { if (!stopped) connect(); }, 3000);
+      };
+    }
+
+    connect();
+    return () => {
+      stopped = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (es) try { es.close(); } catch {}
     };
-
-    const interval = setInterval(poll, 12000);
-    return () => clearInterval(interval);
   }, [state.currentUser?.id]); // eslint-disable-line
 
   // ── Auth ─────────────────────────────────────────────────────────────────────
@@ -443,6 +618,7 @@ export function AppProvider({ children }) {
     toasts,
     dismissToast,
     addToast,
+    setActiveChannel,
     // actions
     login, logout,
     signIn, signOut,

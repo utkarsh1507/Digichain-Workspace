@@ -2,6 +2,7 @@ const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
 const { uploadMessage: uploadFile } = require('../lib/cloudinary');
+const { broadcast } = require('../lib/events');
 const prisma = new PrismaClient();
 
 // ── In-memory typing store ────────────────────────────────────────────────────
@@ -63,11 +64,20 @@ router.post('/channels', auth, async (req, res) => {
     const channel = await prisma.channel.create({
       data: { name, description, memberIds: JSON.stringify(memberIds || [req.user.id]), type: type || 'channel' }
     });
-    res.json(parseChannel(channel));
+    const parsed = parseChannel(channel);
+    broadcast('channel:new', parsed, parsed.memberIds);
+    res.json(parsed);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
 });
+
+// Helper: get member IDs of a channel
+async function getChannelMembers(channelId) {
+  const ch = await prisma.channel.findUnique({ where: { id: channelId } });
+  if (!ch) return [];
+  return JSON.parse(ch.memberIds || '[]');
+}
 
 // GET /api/channels/:id/messages — returns { messages, seenBy }
 router.get('/channels/:id/messages', auth, async (req, res) => {
@@ -102,7 +112,10 @@ router.post('/channels/:id/messages', auth, async (req, res) => {
       data: { channelId: req.params.id, senderId: req.user.id, text },
       include: msgInclude,
     });
-    res.json({ ...msg, reactions: [] });
+    const payload = { ...msg, reactions: [] };
+    const memberIds = await getChannelMembers(req.params.id);
+    broadcast('message:new', payload, memberIds);
+    res.json(payload);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -125,7 +138,10 @@ router.post('/channels/:id/upload', auth, uploadFile.single('file'), async (req,
       },
       include: msgInclude,
     });
-    res.json({ ...msg, reactions: [] });
+    const payload = { ...msg, reactions: [] };
+    const memberIds = await getChannelMembers(req.params.id);
+    broadcast('message:new', payload, memberIds);
+    res.json(payload);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -156,7 +172,10 @@ router.post('/channels/:id/react', auth, async (req, res) => {
       data: { reactions: JSON.stringify(reactions) },
       include: msgInclude,
     });
-    res.json({ ...updated, reactions });
+    const payload = { ...updated, reactions };
+    const memberIds = await getChannelMembers(req.params.id);
+    broadcast('message:update', payload, memberIds);
+    res.json(payload);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -165,11 +184,19 @@ router.post('/channels/:id/react', auth, async (req, res) => {
 // POST /api/channels/:id/read — mark channel as fully read
 router.post('/channels/:id/read', auth, async (req, res) => {
   try {
+    const now = new Date();
     await prisma.channelRead.upsert({
       where: { channelId_userId: { channelId: req.params.id, userId: req.user.id } },
-      create: { channelId: req.params.id, userId: req.user.id, lastReadAt: new Date() },
-      update: { lastReadAt: new Date() },
+      create: { channelId: req.params.id, userId: req.user.id, lastReadAt: now },
+      update: { lastReadAt: now },
     });
+    // Notify all channel members (including sender) so seen receipts update live
+    const memberIds = await getChannelMembers(req.params.id);
+    broadcast('channel:read', {
+      channelId: req.params.id,
+      userId: req.user.id,
+      lastReadAt: now.toISOString(),
+    }, memberIds);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -184,6 +211,14 @@ router.post('/channels/:id/typing', auth, async (req, res) => {
     name: req.body.name || 'Someone',
     timestamp: Date.now(),
   };
+  // Push typing state via SSE so other users get it instantly
+  const memberIds = await getChannelMembers(id);
+  broadcast('channel:typing', {
+    channelId: id,
+    userId: req.user.id,
+    name: req.body.name || 'Someone',
+    timestamp: Date.now(),
+  }, memberIds.filter(uid => uid !== req.user.id));
   res.json({ ok: true });
 });
 

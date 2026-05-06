@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Hash, Plus, Send, Paperclip, Video, Search, MoreHorizontal, Users, X, File, Image, CheckCheck, ExternalLink } from 'lucide-react';
+import { Hash, Plus, Send, Paperclip, Video, Search, MoreHorizontal, Users, X, File, Image, CheckCheck, ExternalLink, Smile } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar, IconBtn, Button, Empty, Modal, Input, fmtTime } from '../components/ui';
 import { messagesApi } from '../api/index.js';
@@ -9,8 +9,8 @@ const URL_REGEX = /(https?:\/\/[^\s]+)/g;
 const EMOJIS = ['👍', '❤️', '🔥', '🚀', '✅', '😂', '😮', '👏'];
 
 export default function Messages() {
-  const { state, loadMessages, sendMessage, sendFile, reactToMessage, ensureDm, createChannel, markChannelRead, addToast } = useApp();
-  const { currentUser, channels, channelMessages, channelSeenBy, users } = state;
+  const { state, loadMessages, sendMessage, sendFile, reactToMessage, ensureDm, createChannel, markChannelRead, addToast, setActiveChannel } = useApp();
+  const { currentUser, channels, channelMessages, channelSeenBy, users, typingByChannel } = state;
 
   const [activeId, setActiveId] = useState(null);
   const [draft, setDraft] = useState('');
@@ -19,11 +19,11 @@ export default function Messages() {
   const [channelForm, setChannelForm] = useState({ name: '', description: '', memberIds: [] });
   const [attachedFile, setAttachedFile] = useState(null);
   const [startingMeet, setStartingMeet] = useState(false);
-  const [typing, setTyping] = useState([]);           // names of users currently typing
+  const [pickerForMsgId, setPickerForMsgId] = useState(null);
+  const [, forceTick] = useState(0);                  // refresh typing labels every 1s
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const typingTimerRef = useRef(null);
-  const typingPollRef = useRef(null);
 
   // Separate channels and DMs
   const myChannels = channels.filter(c => c.type === 'channel');
@@ -33,6 +33,12 @@ export default function Messages() {
   const activeMsgs = channelMessages[activeId] || [];
   const activeSeenBy = channelSeenBy[activeId] || {};
 
+  // Compute typing names from SSE-driven state, only those updated within last 4s
+  const now = Date.now();
+  const typing = Object.entries(typingByChannel?.[activeId] || {})
+    .filter(([uid, data]) => uid !== currentUser?.id && (now - data.timestamp) < 4000)
+    .map(([, data]) => data.name);
+
   // Set first channel as default
   useEffect(() => {
     if (!activeId && myChannels.length > 0) {
@@ -40,45 +46,59 @@ export default function Messages() {
     }
   }, [myChannels.length]); // eslint-disable-line
 
+  // Tell AppContext which channel is currently open (so it can suppress
+  // toast/sound for messages we're already looking at) + clean up on unmount
+  useEffect(() => {
+    setActiveChannel(activeId);
+    return () => setActiveChannel(null);
+  }, [activeId, setActiveChannel]);
+
   // Load messages + mark as read when switching channels
   useEffect(() => {
     if (!activeId) return;
     if (!channelMessages[activeId]) {
       loadMessages(activeId).catch(() => {});
     }
-    // Mark channel as read when opened
     markChannelRead(activeId);
   }, [activeId]); // eslint-disable-line
 
-  // Poll typing status every 2 seconds when in a channel
+  // Re-mark as read whenever a new message arrives in the active channel
+  // (keeps unread count accurate and pushes seen-receipts to the sender)
   useEffect(() => {
-    if (!activeId) return;
-    const poll = async () => {
-      try {
-        const typers = await messagesApi.getTyping(activeId);
-        setTyping(typers);
-      } catch {}
-    };
-    poll(); // immediate first call
-    typingPollRef.current = setInterval(poll, 2000);
-    return () => {
-      clearInterval(typingPollRef.current);
-      setTyping([]);
-    };
-  }, [activeId]);
+    if (!activeId || !activeMsgs.length) return;
+    const last = activeMsgs[activeMsgs.length - 1];
+    const senderId = last.senderId || last.sender?.id;
+    if (senderId !== currentUser?.id) {
+      markChannelRead(activeId);
+    }
+  }, [activeMsgs.length, activeId]); // eslint-disable-line
+
+  // Tick every 1s so the typing indicator fades out after 4s of no events
+  useEffect(() => {
+    const id = setInterval(() => forceTick(x => x + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  // Close reaction picker on outside click
+  useEffect(() => {
+    if (!pickerForMsgId) return;
+    function onDocClick() { setPickerForMsgId(null); }
+    document.addEventListener('click', onDocClick);
+    return () => document.removeEventListener('click', onDocClick);
+  }, [pickerForMsgId]);
 
   // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [activeMsgs.length]);
+  }, [activeMsgs.length, typing.length]);
 
-  // Notify typing
+  // Notify typing — debounced
   const notifyTyping = useCallback(() => {
     if (!activeId || !currentUser) return;
     clearTimeout(typingTimerRef.current);
     typingTimerRef.current = setTimeout(() => {
       messagesApi.setTyping(activeId, currentUser.name.split(' ')[0]).catch(() => {});
-    }, 400);
+    }, 350);
   }, [activeId, currentUser]);
 
   function getConvName(conv) {
@@ -375,19 +395,21 @@ export default function Messages() {
                   const meetLink = rawMeetLink ? normalizeMeetLink(rawMeetLink, `instant-${active.id}-${m.id}`) : null;
                   const inviteText = meetLink ? stripMeetLinkFromText(m.text || '') : m.text;
 
+                  const pickerOpen = pickerForMsgId === m.id;
+
                   return (
                     <div key={m.id} style={{ display: 'flex', flexDirection: 'column',
                       alignItems: isMe ? 'flex-end' : 'flex-start', marginTop: grouped ? 2 : 12 }}>
                       <div style={{ display: 'flex', gap: 10, justifyContent: isMe ? 'flex-end' : 'flex-start',
                         position: 'relative', width: '100%' }}
-                        onMouseEnter={e => { const a = e.currentTarget.querySelector('.msg-actions'); if (a) a.style.opacity = '1'; }}
-                        onMouseLeave={e => { const a = e.currentTarget.querySelector('.msg-actions'); if (a) a.style.opacity = '0'; }}>
+                        onMouseEnter={e => { const a = e.currentTarget.querySelector('.msg-react-trigger'); if (a) a.style.opacity = '1'; }}
+                        onMouseLeave={e => { const a = e.currentTarget.querySelector('.msg-react-trigger'); if (a) a.style.opacity = pickerOpen ? '1' : '0'; }}>
                         {!isMe && (
                           <div style={{ width: 32, flexShrink: 0, display: 'flex', alignItems: 'flex-end' }}>
                             {!grouped && <Avatar name={senderName} size={32} src={m.sender?.avatar} />}
                           </div>
                         )}
-                        <div style={{ maxWidth: '68%', display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start', gap: 2 }}>
+                        <div style={{ maxWidth: '68%', display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start', gap: 2, position: 'relative' }}>
                           {!grouped && !isMe && (
                             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                               <span style={{ fontSize: 12, fontWeight: 600 }}>{senderName}</span>
@@ -453,30 +475,65 @@ export default function Messages() {
                             </span>
                           )}
 
-                          {/* Reactions */}
-                          {(m.reactions || []).filter(r => r.userIds.length > 0).map(r => (
-                            <button key={r.emoji} onClick={() => handleReact(m.id, r.emoji)}
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px',
-                                borderRadius: 999, border: '1px solid var(--border-1)',
-                                background: r.userIds.includes(currentUser?.id) ? 'var(--accent-tint)' : '#fff',
-                                cursor: 'pointer', fontSize: 12, fontFamily: 'inherit' }}>
-                              {r.emoji} {r.userIds.length}
-                            </button>
-                          ))}
+                          {/* Reactions (existing) */}
+                          {(m.reactions || []).filter(r => r.userIds.length > 0).length > 0 && (
+                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
+                              {(m.reactions || []).filter(r => r.userIds.length > 0).map(r => (
+                                <button key={r.emoji} onClick={() => handleReact(m.id, r.emoji)}
+                                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px',
+                                    borderRadius: 999, border: '1px solid var(--border-1)',
+                                    background: r.userIds.includes(currentUser?.id) ? 'var(--accent-tint)' : '#fff',
+                                    cursor: 'pointer', fontSize: 12, fontFamily: 'inherit',
+                                    color: r.userIds.includes(currentUser?.id) ? 'var(--accent-press)' : 'var(--fg-2)' }}>
+                                  {r.emoji} {r.userIds.length}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Reaction picker popover — positioned BELOW the bubble */}
+                          {pickerOpen && (
+                            <div style={{
+                              position: 'absolute',
+                              top: '100%', marginTop: 4,
+                              [isMe ? 'right' : 'left']: 0,
+                              display: 'flex', gap: 2, alignItems: 'center',
+                              padding: '4px 8px', background: '#fff', borderRadius: 999,
+                              border: '1px solid var(--border-1)',
+                              boxShadow: 'var(--shadow-md)', zIndex: 20,
+                            }}>
+                              {EMOJIS.map(emoji => (
+                                <button key={emoji}
+                                  onClick={() => { handleReact(m.id, emoji); setPickerForMsgId(null); }}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer',
+                                    fontSize: 18, padding: '4px 4px', lineHeight: 1, borderRadius: 6,
+                                    transition: 'transform 120ms' }}
+                                  onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.25)'}
+                                  onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}>
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
-                        {/* Reaction picker */}
-                        <div className="msg-actions" style={{ opacity: 0, transition: 'opacity 120ms', position: 'absolute',
-                          [isMe ? 'left' : 'right']: 0, top: 0, display: 'flex', gap: 2, alignItems: 'center',
-                          padding: '2px 6px', background: '#fff', borderRadius: 8, border: '1px solid var(--border-1)',
-                          boxShadow: 'var(--shadow-xs)', zIndex: 10 }}>
-                          {EMOJIS.slice(0, 5).map(emoji => (
-                            <button key={emoji} onClick={() => handleReact(m.id, emoji)}
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 14, padding: '0 2px', lineHeight: 1 }}>
-                              {emoji}
-                            </button>
-                          ))}
-                        </div>
+                        {/* Smile trigger button — appears next to bubble on hover */}
+                        <button
+                          className="msg-react-trigger"
+                          onClick={(e) => { e.stopPropagation(); setPickerForMsgId(pickerOpen ? null : m.id); }}
+                          style={{
+                            opacity: pickerOpen ? 1 : 0, transition: 'opacity 120ms',
+                            alignSelf: 'center', flexShrink: 0,
+                            width: 28, height: 28, borderRadius: '50%',
+                            background: '#fff', border: '1px solid var(--border-1)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            cursor: 'pointer', color: 'var(--fg-3)',
+                            boxShadow: 'var(--shadow-xs)',
+                            order: isMe ? -1 : 1,   // place left of my msgs, right of theirs
+                          }}
+                          title="Add reaction">
+                          <Smile size={14} />
+                        </button>
                       </div>
 
                       {/* Seen indicator — shown below the last seen message */}

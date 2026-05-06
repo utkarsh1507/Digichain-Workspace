@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
+const { broadcast } = require('../lib/events');
 const prisma = new PrismaClient();
 
 const include = {
@@ -37,7 +38,11 @@ router.post('/', auth, async (req, res) => {
       },
       include
     });
-    res.json({ ...meeting, attendeeIds: JSON.parse(meeting.attendeeIds || '[]') });
+    const payload = { ...meeting, attendeeIds: JSON.parse(meeting.attendeeIds || '[]') };
+    // Notify all attendees + the organizer
+    const targets = Array.from(new Set([payload.organizerId, ...payload.attendeeIds]));
+    broadcast('meeting:new', payload, targets);
+    res.json(payload);
   } catch (err) {
     console.error('Create meeting failed:', err);
     res.status(500).json({ error: 'Server error' });
@@ -59,7 +64,10 @@ router.patch('/:id', auth, async (req, res) => {
       data,
       include
     });
-    res.json({ ...updated, attendeeIds: JSON.parse(updated.attendeeIds || '[]') });
+    const payload = { ...updated, attendeeIds: JSON.parse(updated.attendeeIds || '[]') };
+    const targets = Array.from(new Set([payload.organizerId, ...payload.attendeeIds]));
+    broadcast('meeting:update', payload, targets);
+    res.json(payload);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -73,7 +81,9 @@ router.delete('/:id', auth, async (req, res) => {
     if (meeting.organizerId !== req.user.id && req.user.role !== 'founder') {
       return res.status(403).json({ error: 'Forbidden' });
     }
+    const targets = Array.from(new Set([meeting.organizerId, ...JSON.parse(meeting.attendeeIds || '[]')]));
     await prisma.meeting.delete({ where: { id: req.params.id } });
+    broadcast('meeting:delete', { id: req.params.id }, targets);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });

@@ -144,7 +144,7 @@ export default function Dashboard() {
               return (
                 <Card key={a.id}>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                    <Avatar name={author?.name || ''} size={36} />
+                    <Avatar name={author?.name || ''} size={36} src={author?.avatar} />
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <span style={{ fontWeight: 600, fontSize: 13.5 }}>{a.title}</span>
@@ -243,7 +243,7 @@ function FounderDashboard() {
             return (
               <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '36px 1fr 100px 80px', gap: 12, alignItems: 'center',
                 padding: '10px 16px', borderBottom: i < users.length - 1 ? '1px solid var(--border-1)' : 'none' }}>
-                <Avatar name={u.name} size={32} />
+                <Avatar name={u.name} size={32} src={u.avatar} />
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>{u.name}</div>
                   <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>{u.title}</div>
@@ -271,7 +271,7 @@ function FounderDashboard() {
                 return (
                   <div key={l.id} style={{ padding: '12px 16px', borderBottom: i < pendingLeaves.length - 1 ? '1px solid var(--border-1)' : 'none' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
-                      <Avatar name={emp?.name || ''} size={28} />
+                      <Avatar name={emp?.name || ''} size={28} src={emp?.avatar} />
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 13, fontWeight: 600 }}>{emp?.name}</div>
                         <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>{l.fromDate} → {l.toDate} · {l.days} day{l.days > 1 ? 's' : ''}</div>

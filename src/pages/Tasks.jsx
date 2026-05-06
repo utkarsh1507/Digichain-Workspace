@@ -123,7 +123,7 @@ export default function Tasks() {
                   <Pill tone={statusTone(t.status)} dot>{t.status}</Pill>
                   <Pill tone={priorityTone(t.priority)}>{t.priority}</Pill>
                   <span style={{ fontSize: 12, color: 'var(--fg-2)' }}>{t.dueDate}</span>
-                  <Avatar name={assignee?.name || '?'} size={24} />
+                  <Avatar name={assignee?.name || '?'} size={24} src={assignee?.avatar} />
                 </div>
               );
             })}
@@ -156,17 +156,27 @@ export default function Tasks() {
                 <Select value={sel.priority} onChange={e => updateTask(sel.id, { priority: e.target.value })}
                   options={PRIORITIES.map(p => ({ value: p, label: p }))} style={{ margin: 0 }} />
                 <span style={{ color: 'var(--fg-3)', paddingTop: 8 }}>Assignee</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 6 }}>
-                  <Avatar name={users.find(u => u.id === sel.assigneeId)?.name || '?'} size={24} />
-                  <span>{users.find(u => u.id === sel.assigneeId)?.name}</span>
-                </div>
+                {(() => {
+                  const u = users.find(u => u.id === sel.assigneeId);
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 6 }}>
+                      <Avatar name={u?.name || '?'} size={24} src={u?.avatar} />
+                      <span>{u?.name}</span>
+                    </div>
+                  );
+                })()}
                 <span style={{ color: 'var(--fg-3)', paddingTop: 8 }}>Due Date</span>
                 <span style={{ paddingTop: 6, fontWeight: 500 }}>{sel.dueDate}</span>
                 <span style={{ color: 'var(--fg-3)', paddingTop: 8 }}>Reporter</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 6 }}>
-                  <Avatar name={users.find(u => u.id === sel.reporterId)?.name || '?'} size={24} />
-                  <span>{users.find(u => u.id === sel.reporterId)?.name}</span>
-                </div>
+                {(() => {
+                  const u = users.find(u => u.id === sel.reporterId);
+                  return (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 6 }}>
+                      <Avatar name={u?.name || '?'} size={24} src={u?.avatar} />
+                      <span>{u?.name}</span>
+                    </div>
+                  );
+                })()}
               </div>
               <Divider />
               <div>
@@ -182,7 +192,7 @@ export default function Tasks() {
                     const u = users.find(u => u.id === c.userId);
                     return (
                       <div key={c.id} style={{ display: 'flex', gap: 10 }}>
-                        <Avatar name={u?.name || '?'} size={28} />
+                        <Avatar name={u?.name || '?'} size={28} src={u?.avatar} />
                         <div style={{ flex: 1, background: 'var(--bg-1)', borderRadius: 10, padding: '8px 12px' }}>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                             <span style={{ fontSize: 12, fontWeight: 600 }}>{u?.name}</span>
@@ -195,7 +205,7 @@ export default function Tasks() {
                   })}
                 </div>
                 <form onSubmit={handleComment} style={{ display: 'flex', gap: 8, marginTop: 12, alignItems: 'flex-start' }}>
-                  <Avatar name={currentUser?.name || ''} size={28} />
+                  <Avatar name={currentUser?.name || ''} size={28} src={currentUser?.avatar} />
                   <div style={{ flex: 1, display: 'flex', gap: 8 }}>
                     <input value={comment} onChange={e => setComment(e.target.value)} placeholder="Add a comment…"
                       style={{ flex: 1, padding: '8px 12px', fontFamily: 'inherit', fontSize: 13, color: 'var(--fg-1)',

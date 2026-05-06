@@ -1,5 +1,7 @@
 
 🚀 Digichain Workspace Server running on http://localhost:3001
-   Serving uploads from /uploads
-   CORS enabled for: http://localhost:5174
+   Serving legacy local uploads from /uploads
+   CORS enabled for: http://localhost:5174, https://digichain-workspace.vercel.app, http://localhost:3000, http://localhost:5173
+
+   CORS regex patterns: /^https:\/\/digichain-workspace(-git-[a-z0-9-]+)?\.vercel\.app$/
 

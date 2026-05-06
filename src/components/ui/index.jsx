@@ -37,14 +37,18 @@ export function Avatar({ name = '?', size = 32, src, status, ring, gradient }) {
   );
   return inner;
 }
-export function AvatarStack({ names = [], size = 28, max = 4 }) {
-  const shown = names.slice(0, max);
-  const extra = names.length - shown.length;
+export function AvatarStack({ names = [], avatars = [], size = 28, max = 4, users = null }) {
+  // Backwards compatible: accept names+avatars in parallel arrays, or `users` array of {name, avatar}
+  const list = users
+    ? users.map(u => ({ name: u?.name || '?', avatar: u?.avatar }))
+    : names.map((n, i) => ({ name: n, avatar: avatars[i] }));
+  const shown = list.slice(0, max);
+  const extra = list.length - shown.length;
   return (
     <div style={{ display: 'flex' }}>
-      {shown.map((n, i) => (
+      {shown.map((u, i) => (
         <span key={i} style={{ marginLeft: i === 0 ? 0 : -Math.round(size * 0.3), border: '2px solid #fff', borderRadius: '50%', display: 'inline-flex' }}>
-          <Avatar name={n} size={size} />
+          <Avatar name={u.name} size={size} src={u.avatar} />
         </span>
       ))}
       {extra > 0 && (

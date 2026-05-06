@@ -82,6 +82,7 @@ app.use('/api', require('./routes/messages'));
 app.use('/api/announcements', require('./routes/announcements'));
 app.use('/api/documents', require('./routes/documents'));
 app.use('/api/meetings', require('./routes/meetings'));
+app.use('/api/events', require('./routes/events'));
 
 // Health check
 app.get('/api/health', (req, res) => res.json({ status: 'ok', time: new Date().toISOString() }));

@@ -1,7 +1,8 @@
 import { useState, useRef } from 'react';
-import { Camera, Edit3, Save, X, Mail, Phone, Briefcase, Building2, Calendar, User, Key } from 'lucide-react';
+import { Camera, Edit3, Save, X, Mail, Phone, Briefcase, Building2, Calendar, User, Key, Lock, Eye, EyeOff } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Card, Button, Input, Textarea, Select, Pill, Eyebrow, Divider, Avatar, fmtDate } from '../components/ui';
+import { authApi } from '../api';
 const DEPARTMENTS = ['Engineering', 'Operations', 'Marketing', 'Leadership', 'Design', 'Sales'];
 const LEAVE_TYPES = [
   { id: 'Casual', label: 'Casual Leave', total: 12 },
@@ -11,12 +12,46 @@ const LEAVE_TYPES = [
 ];
 
 export default function Profile() {
-  const { state, updateUser, uploadAvatar } = useApp();
+  const { state, updateUser, uploadAvatar, addToast } = useApp();
   const { currentUser, leaves, attendance, tasks } = state;
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({ ...currentUser });
   const [saving, setSaving] = useState(false);
   const photoRef = useRef();
+
+  // Password change state
+  const [pwOpen, setPwOpen] = useState(false);
+  const [pwForm, setPwForm] = useState({ current: '', next: '', confirm: '' });
+  const [pwSaving, setPwSaving] = useState(false);
+  const [pwError, setPwError] = useState('');
+  const [showPw, setShowPw] = useState({ current: false, next: false, confirm: false });
+
+  async function handleChangePassword(e) {
+    e.preventDefault();
+    setPwError('');
+    if (pwForm.next.length < 4) return setPwError('New password must be at least 4 characters.');
+    if (pwForm.next !== pwForm.confirm) return setPwError('New passwords do not match.');
+    setPwSaving(true);
+    try {
+      // Verify current password via login (throws if wrong)
+      try {
+        await authApi.login(currentUser.email, pwForm.current);
+      } catch {
+        setPwError('Current password is incorrect.');
+        setPwSaving(false);
+        return;
+      }
+      await updateUser(currentUser.id, { password: pwForm.next });
+      setPwForm({ current: '', next: '', confirm: '' });
+      setPwOpen(false);
+      if (addToast) addToast({ type: 'success', title: 'Password updated', body: 'Your password was changed successfully.' });
+      else alert('Password updated successfully.');
+    } catch (err) {
+      setPwError(err.message || 'Could not change password.');
+    } finally {
+      setPwSaving(false);
+    }
+  }
 
   if (!currentUser) return null;
 
@@ -188,6 +223,68 @@ export default function Profile() {
                 </div>
               )}
             </div>
+          )}
+        </Card>
+
+        {/* Security / Password */}
+        <Card style={{ padding: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: pwOpen ? 18 : 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--accent-tint)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Lock size={16} color="var(--accent)" />
+              </div>
+              <div>
+                <Eyebrow>Security</Eyebrow>
+                <h3 style={{ margin: '2px 0 0', fontSize: 16, fontWeight: 700 }}>Password</h3>
+                <p style={{ margin: '2px 0 0', fontSize: 12, color: 'var(--fg-3)' }}>
+                  {pwOpen ? 'Update your password below.' : 'Change your account password regularly to stay secure.'}
+                </p>
+              </div>
+            </div>
+            {!pwOpen
+              ? <Button variant="secondary" icon={Key} onClick={() => { setPwOpen(true); setPwError(''); }}>Change Password</Button>
+              : <Button variant="ghost" icon={X} onClick={() => { setPwOpen(false); setPwError(''); setPwForm({ current: '', next: '', confirm: '' }); }}>Cancel</Button>}
+          </div>
+
+          {pwOpen && (
+            <form onSubmit={handleChangePassword} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {[
+                { key: 'current', label: 'Current Password' },
+                { key: 'next',    label: 'New Password' },
+                { key: 'confirm', label: 'Confirm New Password' },
+              ].map(f => (
+                <div key={f.key} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)' }}>{f.label}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '0 12px',
+                    background: '#fff', border: '1px solid var(--border-1)', borderRadius: 10 }}>
+                    <Lock size={15} color="var(--fg-3)" />
+                    <input
+                      type={showPw[f.key] ? 'text' : 'password'}
+                      value={pwForm[f.key]}
+                      onChange={e => setPwForm(p => ({ ...p, [f.key]: e.target.value }))}
+                      required
+                      style={{ flex: 1, padding: '10px 0', fontFamily: 'inherit', fontSize: 14, color: 'var(--fg-1)', background: 'transparent', border: 'none', outline: 'none' }}
+                    />
+                    <button type="button" onClick={() => setShowPw(s => ({ ...s, [f.key]: !s[f.key] }))}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', display: 'flex', padding: 4 }}>
+                      {showPw[f.key] ? <EyeOff size={15} /> : <Eye size={15} />}
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {pwError && (
+                <div style={{ padding: '8px 12px', borderRadius: 8, background: 'var(--danger-tint)',
+                  color: '#ad2236', fontSize: 12, fontWeight: 500 }}>
+                  {pwError}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <Button type="submit" variant="primary" icon={Save} disabled={pwSaving}>
+                  {pwSaving ? 'Saving…' : 'Update Password'}
+                </Button>
+              </div>
+            </form>
           )}
         </Card>
 

@@ -115,7 +115,7 @@ export default function Meetings() {
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                   <input type="checkbox" checked={form.attendeeIds.includes(u.id)} onChange={() => toggleAttendee(u.id)}
                     style={{ accentColor: 'var(--accent)', width: 15, height: 15 }} />
-                  <Avatar name={u.name} size={28} />
+                  <Avatar name={u.name} size={28} src={u.avatar} />
                   <span style={{ fontSize: 13, fontWeight: 500 }}>{u.name}</span>
                   <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>{u.title}</span>
                 </label>
@@ -161,7 +161,7 @@ function MeetingCard({ meeting: m, users, currentUser, onDelete, highlight }) {
 
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <AvatarStack names={attendeeIds.map(id => users.find(u => u.id === id)?.name || id)} size={26} />
+            <AvatarStack users={attendeeIds.map(id => users.find(u => u.id === id))} size={26} />
             <span style={{ fontSize: 12, color: 'var(--fg-3)' }}>{attendeeIds.length} attendee{attendeeIds.length !== 1 ? 's' : ''}</span>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

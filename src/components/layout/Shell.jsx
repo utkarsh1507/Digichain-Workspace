@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, CheckSquare, MessageSquare, Calendar, Clock,
@@ -6,7 +6,8 @@ import {
   Bell, Settings, Search, ChevronUp, Video,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Avatar, IconBtn, NotificationToast } from '../ui';
+import { Avatar, IconBtn, NotificationToast, Modal, Button } from '../ui';
+import { requestNotificationPermission, getNotificationPermission } from '../../utils/notifications';
 
 const NAV = [
   {
@@ -77,6 +78,30 @@ export function Shell({ children }) {
   const location = useLocation();
   const [profileOpen, setProfileOpen] = useState(false);
   const [searchVal, setSearchVal] = useState('');
+  const [signOutOpen, setSignOutOpen] = useState(false);
+  const [showNotifyPrompt, setShowNotifyPrompt] = useState(false);
+
+  // Ask for desktop notification permission on first mount (one-time soft prompt)
+  useEffect(() => {
+    if (!currentUser) return;
+    const dismissed = localStorage.getItem('dw_notify_prompt_dismissed');
+    const perm = getNotificationPermission();
+    if (perm === 'default' && !dismissed) {
+      // Show our own friendly inline prompt before triggering the native one
+      const t = setTimeout(() => setShowNotifyPrompt(true), 1500);
+      return () => clearTimeout(t);
+    }
+  }, [currentUser?.id]); // eslint-disable-line
+
+  async function enableNotifications() {
+    await requestNotificationPermission();
+    setShowNotifyPrompt(false);
+    localStorage.setItem('dw_notify_prompt_dismissed', '1');
+  }
+  function dismissNotifyPrompt() {
+    setShowNotifyPrompt(false);
+    localStorage.setItem('dw_notify_prompt_dismissed', '1');
+  }
 
   const pendingLeaves = (leaves || []).filter(l => l.status === 'Pending').length;
 
@@ -174,7 +199,7 @@ export function Shell({ children }) {
                 </div>
               ))}
               <div style={{ height: 1, background: 'var(--border-1)', margin: '4px 0' }} />
-              <div onClick={() => logout()}
+              <div onClick={() => { setProfileOpen(false); setSignOutOpen(true); }}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8,
                   fontSize: 13, fontWeight: 500, cursor: 'pointer', color: '#ad2236' }}
                 onMouseEnter={e => e.currentTarget.style.background = 'var(--danger-tint)'}
@@ -219,6 +244,47 @@ export function Shell({ children }) {
           {children}
         </main>
       </div>
+
+      {/* Sign-out confirmation */}
+      <Modal open={signOutOpen} onClose={() => setSignOutOpen(false)} title="Sign out?" width={400}>
+        <p style={{ margin: '0 0 18px', fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+          You'll be signed out of Digichain Workspace and will need to log in again to access your team data.
+        </p>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <Button variant="ghost" onClick={() => setSignOutOpen(false)}>Cancel</Button>
+          <Button variant="danger" icon={LogOut} onClick={() => { setSignOutOpen(false); logout(); navigate('/login'); }}>
+            Sign out
+          </Button>
+        </div>
+      </Modal>
+
+      {/* Friendly notification permission prompt */}
+      {showNotifyPrompt && (
+        <div style={{
+          position: 'fixed', bottom: 20, left: 20, zIndex: 9999,
+          background: '#fff', borderRadius: 14, padding: '14px 18px',
+          boxShadow: '0 4px 8px rgba(14,14,20,0.04), 0 16px 40px rgba(14,14,20,0.10)',
+          border: '1px solid var(--border-1)',
+          maxWidth: 340, display: 'flex', gap: 12, alignItems: 'flex-start',
+        }}>
+          <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--accent-tint)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>
+            🔔
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fg-1)', marginBottom: 2 }}>
+              Stay in the loop
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--fg-3)', lineHeight: 1.5, marginBottom: 10 }}>
+              Get desktop alerts for new messages, announcements, and meetings even when this tab is in the background.
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <Button size="sm" variant="primary" onClick={enableNotifications}>Enable</Button>
+              <Button size="sm" variant="ghost" onClick={dismissNotifyPrompt}>Not now</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

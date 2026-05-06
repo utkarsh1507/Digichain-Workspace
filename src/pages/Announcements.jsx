@@ -114,7 +114,7 @@ function AnnouncementCard({ a, users, currentUser, onReact, isFounder, onPin, on
   return (
     <Card style={{ padding: 20 }}>
       <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-        <Avatar name={author?.name || ''} size={40} />
+        <Avatar name={author?.name || ''} size={40} src={author?.avatar} />
         <div style={{ flex: 1, minWidth: 0 }}>
           {/* Header */}
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
