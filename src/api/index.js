@@ -7,7 +7,10 @@ function normalizeApiBase(value) {
   return `${trimmed}/api`;
 }
 
-const BASE = normalizeApiBase(import.meta.env.VITE_API_URL);
+const DEFAULT_PROD_API_URL = 'https://digichain-workspace.onrender.com/api';
+const BASE = normalizeApiBase(
+  import.meta.env.VITE_API_URL || (import.meta.env.PROD ? DEFAULT_PROD_API_URL : '/api')
+);
 
 function getToken() {
   return localStorage.getItem('dw_token');

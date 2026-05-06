@@ -6,23 +6,30 @@ const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+const DEFAULT_CLIENT_URLS = [
+  'https://digichain-workspace.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:5173',
+  'http://localhost:5174',
+];
+const DEFAULT_CLIENT_URL_REGEX = [
+  '^https://digichain-workspace(-git-[a-z0-9-]+)?\\.vercel\\.app$',
+];
 
 function parseAllowedOrigins() {
-  const configured = (process.env.CLIENT_URL || '')
+  const configured = (process.env.CLIENT_URL || DEFAULT_CLIENT_URLS.join(','))
     .split(',')
     .map((origin) => origin.trim())
     .filter(Boolean);
 
   return Array.from(new Set([
     ...configured,
-    'http://localhost:3000',
-    'http://localhost:5173',
-    'http://localhost:5174',
+    ...DEFAULT_CLIENT_URLS,
   ]));
 }
 
 function parseAllowedOriginRegexes() {
-  return (process.env.CLIENT_URL_REGEX || '')
+  return (process.env.CLIENT_URL_REGEX || DEFAULT_CLIENT_URL_REGEX.join(','))
     .split(',')
     .map((pattern) => pattern.trim())
     .filter(Boolean)

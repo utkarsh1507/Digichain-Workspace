@@ -7,6 +7,28 @@ This repo is split into:
 
 The frontend talks to the backend through `VITE_API_URL`, and the backend only accepts browser requests from origins allowed by `CLIENT_URL` and the optional `CLIENT_URL_REGEX`.
 
+## Importable env files
+
+To make deployment easier, this repo now includes import-ready env templates:
+
+- Vercel/public frontend values: [`deploy/vercel.env.example`](./deploy/vercel.env.example)
+- Render/backend values: [`deploy/render.env.example`](./deploy/render.env.example)
+
+What is already baked into the repo:
+
+- [`.env.production`](./.env.production) already points the frontend to `https://digichain-workspace.onrender.com/api`
+- [`render.yaml`](./render.yaml) already sets default non-secret Render values for `CLIENT_URL` and `CLIENT_URL_REGEX`
+- The app also has production URL fallbacks in code, so missing public URL env vars are less likely to break login
+
+What you still must fill in before backend deploy:
+
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `CLOUDINARY_URL`
+- `CLOUDINARY_CLOUD_NAME`
+- `CLOUDINARY_API_KEY`
+- `CLOUDINARY_API_SECRET`
+
 ## 1. Backend on Render
 
 Create a **Web Service** on Render from this same repository.

@@ -12,9 +12,9 @@ services:
       - key: JWT_SECRET
         sync: false
       - key: CLIENT_URL
-        sync: false
+        value: https://digichain-workspace.vercel.app,http://localhost:5174
       - key: CLIENT_URL_REGEX
-        sync: false
+        value: ^https://digichain-workspace(-git-[a-z0-9-]+)?\.vercel\.app$
       - key: CLOUDINARY_URL
         sync: false
       - key: CLOUDINARY_CLOUD_NAME
