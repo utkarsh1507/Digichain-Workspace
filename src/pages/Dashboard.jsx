@@ -124,7 +124,7 @@ export default function Dashboard() {
               </div>
               <div style={{ fontSize: 13.5, fontWeight: 500 }}>{m.title}</div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <AvatarStack names={(m.attendeeIds || []).map(id => users.find(u => u.id === id)?.name || id)} size={22} />
+                <AvatarStack users={(m.attendeeIds || []).map(id => users.find(u => u.id === id)).filter(Boolean)} size={22} />
                 <a href={normalizeMeetLink(m.meetLink, m.id)} target="_blank" rel="noopener noreferrer"
                   style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
                   <Video size={12} />Join Call
@@ -140,7 +140,7 @@ export default function Dashboard() {
         <Section title="Recent announcements" action={<Button variant="ghost" size="sm" iconRight={ChevronRight} onClick={() => navigate('/announcements')}>See all</Button>}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {announcements.slice(0, 3).map(a => {
-              const author = users.find(u => u.id === a.authorId);
+              const author = users.find(u => u.id === a.authorId) || a.author;
               return (
                 <Card key={a.id}>
                   <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
@@ -153,7 +153,7 @@ export default function Dashboard() {
                       </div>
                       <p style={{ margin: '5px 0 0', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.5,
                         overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                        {a.body}
+                        {a.content || a.body}
                       </p>
                     </div>
                   </div>
@@ -169,7 +169,7 @@ export default function Dashboard() {
             {teamOnline.map((u, i) => (
               <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
                 borderBottom: i < teamOnline.length - 1 ? '1px solid var(--border-1)' : 'none' }}>
-                <Avatar name={u.name} size={34} status="online" />
+                <Avatar name={u.name} size={34} src={u.avatar} status="online" />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-1)' }}>{u.name}</div>
                   <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>{u.title}</div>
@@ -334,7 +334,7 @@ function FounderDashboard() {
                   const assignee = users.find(u => u.id === t.assigneeId);
                   return (
                     <div key={t.id} style={{ padding: '8px 14px', borderBottom: '1px solid var(--border-1)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Avatar name={assignee?.name || ''} size={22} />
+                      <Avatar name={assignee?.name || ''} size={22} src={assignee?.avatar} />
                       <span style={{ flex: 1, fontSize: 12, fontWeight: 500, color: 'var(--fg-1)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
                     </div>
                   );

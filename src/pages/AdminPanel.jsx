@@ -121,7 +121,7 @@ export default function AdminPanel() {
               return (
                 <div key={l.id} style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 20px',
                   borderBottom: i < pendingLeaves.length - 1 ? '1px solid var(--border-1)' : 'none' }}>
-                  <Avatar name={emp?.name || ''} size={36} />
+                  <Avatar name={emp?.name || ''} size={36} src={emp?.avatar} />
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 14, fontWeight: 600 }}>{emp?.name}</div>
                     <div style={{ fontSize: 12, color: 'var(--fg-3)' }}>{l.fromDate} → {l.toDate} · {l.days} day{l.days !== 1 ? 's' : ''} · {l.type}</div>

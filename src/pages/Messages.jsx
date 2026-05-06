@@ -116,6 +116,10 @@ export default function Messages() {
     return users.find(u => u.id === otherId) || null;
   }
 
+  function getConvAvatar(conv) {
+    return getDMOtherUser(conv)?.avatar || null;
+  }
+
   function getLastMsg(convId) {
     const msgs = channelMessages[convId] || [];
     if (!msgs.length) return 'No messages yet';
@@ -319,6 +323,7 @@ export default function Messages() {
           {myDMs.map(d => (
             <ConvItem key={d.id} conv={d} active={d.id === activeId}
               name={getConvName(d)} last={getLastMsg(d.id)}
+              avatar={getConvAvatar(d)}
               unread={state.unreadCounts?.[d.id] || 0}
               onClick={() => handleSwitchChannel(d.id)} />
           ))}
@@ -401,9 +406,7 @@ export default function Messages() {
                     <div key={m.id} style={{ display: 'flex', flexDirection: 'column',
                       alignItems: isMe ? 'flex-end' : 'flex-start', marginTop: grouped ? 2 : 12 }}>
                       <div style={{ display: 'flex', gap: 10, justifyContent: isMe ? 'flex-end' : 'flex-start',
-                        position: 'relative', width: '100%' }}
-                        onMouseEnter={e => { const a = e.currentTarget.querySelector('.msg-react-trigger'); if (a) a.style.opacity = '1'; }}
-                        onMouseLeave={e => { const a = e.currentTarget.querySelector('.msg-react-trigger'); if (a) a.style.opacity = pickerOpen ? '1' : '0'; }}>
+                        position: 'relative', width: '100%' }}>
                         {!isMe && (
                           <div style={{ width: 32, flexShrink: 0, display: 'flex', alignItems: 'flex-end' }}>
                             {!grouped && <Avatar name={senderName} size={32} src={m.sender?.avatar} />}
@@ -475,21 +478,31 @@ export default function Messages() {
                             </span>
                           )}
 
-                          {/* Reactions (existing) */}
-                          {(m.reactions || []).filter(r => r.userIds.length > 0).length > 0 && (
-                            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 2 }}>
-                              {(m.reactions || []).filter(r => r.userIds.length > 0).map(r => (
-                                <button key={r.emoji} onClick={() => handleReact(m.id, r.emoji)}
-                                  style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px',
-                                    borderRadius: 999, border: '1px solid var(--border-1)',
-                                    background: r.userIds.includes(currentUser?.id) ? 'var(--accent-tint)' : '#fff',
-                                    cursor: 'pointer', fontSize: 12, fontFamily: 'inherit',
-                                    color: r.userIds.includes(currentUser?.id) ? 'var(--accent-press)' : 'var(--fg-2)' }}>
-                                  {r.emoji} {r.userIds.length}
-                                </button>
-                              ))}
-                            </div>
-                          )}
+                          {/* Reactions and trigger */}
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4, alignItems: 'center' }}>
+                            {(m.reactions || []).filter(r => r.userIds.length > 0).map(r => (
+                              <button key={r.emoji} onClick={() => handleReact(m.id, r.emoji)}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px',
+                                  borderRadius: 999, border: '1px solid var(--border-1)',
+                                  background: r.userIds.includes(currentUser?.id) ? 'var(--accent-tint)' : '#fff',
+                                  cursor: 'pointer', fontSize: 12, fontFamily: 'inherit',
+                                  color: r.userIds.includes(currentUser?.id) ? 'var(--accent-press)' : 'var(--fg-2)' }}>
+                                {r.emoji} {r.userIds.length}
+                              </button>
+                            ))}
+                            <button
+                              onClick={(e) => { e.stopPropagation(); setPickerForMsgId(pickerOpen ? null : m.id); }}
+                              style={{
+                                width: 28, height: 28, borderRadius: '50%',
+                                background: '#fff', border: '1px solid var(--border-1)',
+                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                cursor: 'pointer', color: pickerOpen ? 'var(--accent)' : 'var(--fg-3)',
+                                boxShadow: pickerOpen ? 'var(--shadow-xs)' : 'none',
+                              }}
+                              title="Add reaction">
+                              <Smile size={14} />
+                            </button>
+                          </div>
 
                           {/* Reaction picker popover — positioned BELOW the bubble */}
                           {pickerOpen && (
@@ -516,24 +529,6 @@ export default function Messages() {
                             </div>
                           )}
                         </div>
-
-                        {/* Smile trigger button — appears next to bubble on hover */}
-                        <button
-                          className="msg-react-trigger"
-                          onClick={(e) => { e.stopPropagation(); setPickerForMsgId(pickerOpen ? null : m.id); }}
-                          style={{
-                            opacity: pickerOpen ? 1 : 0, transition: 'opacity 120ms',
-                            alignSelf: 'center', flexShrink: 0,
-                            width: 28, height: 28, borderRadius: '50%',
-                            background: '#fff', border: '1px solid var(--border-1)',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            cursor: 'pointer', color: 'var(--fg-3)',
-                            boxShadow: 'var(--shadow-xs)',
-                            order: isMe ? -1 : 1,   // place left of my msgs, right of theirs
-                          }}
-                          title="Add reaction">
-                          <Smile size={14} />
-                        </button>
                       </div>
 
                       {/* Seen indicator — shown below the last seen message */}
@@ -678,7 +673,7 @@ export default function Messages() {
   );
 }
 
-function ConvItem({ conv, active, name, last, unread, onClick }) {
+function ConvItem({ conv, active, name, last, unread, onClick, avatar }) {
   const [hover, setHover] = useState(false);
   return (
     <div onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
@@ -686,7 +681,7 @@ function ConvItem({ conv, active, name, last, unread, onClick }) {
         background: active ? '#fff' : hover ? 'var(--bg-3)' : 'transparent',
         boxShadow: active ? 'var(--shadow-xs)' : 'none', cursor: 'pointer', transition: 'background 120ms' }}>
       {conv.type === 'dm'
-        ? <Avatar name={name} size={30} status="online" />
+        ? <Avatar name={name} size={30} src={avatar} status="online" />
         : <span style={{ width: 30, height: 30, borderRadius: 8, background: active ? 'var(--accent-tint)' : 'var(--bg-2)',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             color: active ? 'var(--accent)' : 'var(--fg-3)', fontWeight: 700, flexShrink: 0 }}>

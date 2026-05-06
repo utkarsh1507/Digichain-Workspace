@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Camera, Edit3, Save, X, Mail, Phone, Briefcase, Building2, Calendar, User, Key, Lock, Eye, EyeOff } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Card, Button, Input, Textarea, Select, Pill, Eyebrow, Divider, Avatar, fmtDate } from '../components/ui';
@@ -25,6 +25,12 @@ export default function Profile() {
   const [pwSaving, setPwSaving] = useState(false);
   const [pwError, setPwError] = useState('');
   const [showPw, setShowPw] = useState({ current: false, next: false, confirm: false });
+
+  useEffect(() => {
+    if (!editing && currentUser) {
+      setForm({ ...currentUser });
+    }
+  }, [currentUser, editing]);
 
   async function handleChangePassword(e) {
     e.preventDefault();

@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
 const { uploadAvatar } = require('../lib/cloudinary');
+const { broadcast } = require('../lib/events');
 const prisma = new PrismaClient();
 
 // GET /api/users — all users (auth required)
@@ -37,6 +38,7 @@ router.post('/', auth, async (req, res) => {
       data: { name, email, password: hashed, role: role || 'employee', title, department, phone, joinDate },
     });
     const { password, ...safeUser } = user;
+    broadcast('user:new', safeUser);
     res.json(safeUser);
   } catch (err) {
     if (err.code === 'P2002') return res.status(409).json({ error: 'Email already exists' });
@@ -56,6 +58,7 @@ router.patch('/:id', auth, async (req, res) => {
     }
     const user = await prisma.user.update({ where: { id: req.params.id }, data });
     const { password: _, ...safeUser } = user;
+    broadcast('user:update', safeUser);
     res.json(safeUser);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -107,6 +110,7 @@ router.delete('/:id', auth, async (req, res) => {
       prisma.channelRead.deleteMany({ where: { userId } }),
       prisma.user.delete({ where: { id: userId } }),
     ]);
+    broadcast('user:delete', { id: userId });
     res.json({ ok: true });
   } catch (err) {
     console.error('Delete user failed:', err);
@@ -124,6 +128,7 @@ router.post('/:id/avatar', auth, uploadAvatar.single('avatar'), async (req, res)
     const avatarUrl = req.file.path; // Cloudinary permanent URL
     const user = await prisma.user.update({ where: { id: req.params.id }, data: { avatar: avatarUrl } });
     const { password, ...safeUser } = user;
+    broadcast('user:update', safeUser);
     res.json(safeUser);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });

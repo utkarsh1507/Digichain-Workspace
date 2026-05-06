@@ -28,6 +28,99 @@ const initialState = {
   loginError: null,
 };
 
+function upsertById(list, item, { prepend = true } = {}) {
+  const idx = list.findIndex((entry) => entry.id === item.id);
+  if (idx === -1) {
+    return prepend ? [item, ...list] : [...list, item];
+  }
+  const next = list.slice();
+  next[idx] = { ...next[idx], ...item };
+  return next;
+}
+
+function mergeEmbeddedUser(existing, user) {
+  if (!existing || existing.id !== user.id) return existing;
+  return { ...existing, ...user };
+}
+
+function syncEmbeddedUser(state, user) {
+  const users = upsertById(state.users, user, { prepend: false });
+  const currentUser = state.currentUser?.id === user.id
+    ? { ...state.currentUser, ...user }
+    : state.currentUser;
+
+  const attendance = state.attendance.map((record) => ({
+    ...record,
+    user: mergeEmbeddedUser(record.user, user),
+  }));
+  const todayAttendance = state.todayAttendance
+    ? {
+        ...state.todayAttendance,
+        user: mergeEmbeddedUser(state.todayAttendance.user, user),
+      }
+    : state.todayAttendance;
+  const leaves = state.leaves.map((leave) => ({
+    ...leave,
+    user: mergeEmbeddedUser(leave.user, user),
+  }));
+  const tasks = state.tasks.map((task) => ({
+    ...task,
+    assignee: mergeEmbeddedUser(task.assignee, user),
+    reporter: mergeEmbeddedUser(task.reporter, user),
+    comments: (task.comments || []).map((comment) => ({
+      ...comment,
+      user: mergeEmbeddedUser(comment.user, user),
+    })),
+  }));
+  const channelMessages = Object.fromEntries(
+    Object.entries(state.channelMessages).map(([channelId, messages]) => [
+      channelId,
+      messages.map((message) => ({
+        ...message,
+        sender: mergeEmbeddedUser(message.sender, user),
+      })),
+    ])
+  );
+  const announcements = state.announcements.map((ann) => (
+    ann.authorId === user.id || ann.author?.id === user.id
+      ? { ...ann, author: { ...(ann.author || {}), ...user } }
+      : ann
+  ));
+  const documents = state.documents.map((doc) => ({
+    ...doc,
+    uploader: mergeEmbeddedUser(doc.uploader, user),
+  }));
+  const meetings = state.meetings.map((meeting) => (
+    meeting.organizerId === user.id || meeting.organizer?.id === user.id
+      ? { ...meeting, organizer: { ...(meeting.organizer || {}), ...user } }
+      : meeting
+  ));
+
+  return {
+    ...state,
+    users,
+    currentUser,
+    attendance,
+    todayAttendance,
+    leaves,
+    tasks,
+    channelMessages,
+    announcements,
+    documents,
+    meetings,
+  };
+}
+
+function upsertAttendanceRecord(records, record) {
+  const idx = records.findIndex((entry) =>
+    entry.id === record.id || (entry.userId === record.userId && entry.date === record.date)
+  );
+  if (idx === -1) return [record, ...records];
+  const next = records.slice();
+  next[idx] = { ...next[idx], ...record };
+  return next;
+}
+
 function reducer(state, action) {
   switch (action.type) {
 
@@ -106,67 +199,82 @@ function reducer(state, action) {
     case 'LOGOUT':            return { ...initialState, loading: false };
 
     case 'SIGN_IN':
-      return { ...state, todayAttendance: action.record, attendance: [action.record, ...state.attendance] };
+      return {
+        ...state,
+        todayAttendance: action.record,
+        attendance: upsertAttendanceRecord(state.attendance, action.record),
+      };
     case 'SIGN_OUT': {
       const updated = action.record;
       return {
         ...state,
         todayAttendance: updated,
-        attendance: state.attendance.map(a => a.id === updated.id ? updated : a),
+        attendance: upsertAttendanceRecord(state.attendance, updated),
+      };
+    }
+    case 'UPSERT_ATTENDANCE': {
+      const today = new Date().toISOString().split('T')[0];
+      const isTodayForCurrentUser =
+        action.record.userId === state.currentUser?.id && action.record.date === today;
+      return {
+        ...state,
+        attendance: upsertAttendanceRecord(state.attendance, action.record),
+        todayAttendance: isTodayForCurrentUser
+          ? { ...(state.todayAttendance || {}), ...action.record }
+          : state.todayAttendance,
       };
     }
 
-    case 'ADD_LEAVE':    return { ...state, leaves: [action.leave, ...state.leaves] };
-    case 'UPDATE_LEAVE': return { ...state, leaves: state.leaves.map(l => l.id === action.leave.id ? action.leave : l) };
+    case 'ADD_LEAVE':    return { ...state, leaves: upsertById(state.leaves, action.leave) };
+    case 'UPDATE_LEAVE': return { ...state, leaves: upsertById(state.leaves, action.leave) };
     case 'REMOVE_LEAVE': return { ...state, leaves: state.leaves.filter(l => l.id !== action.id) };
 
-    case 'ADD_TASK':    return { ...state, tasks: [action.task, ...state.tasks] };
-    case 'UPDATE_TASK': return { ...state, tasks: state.tasks.map(t => t.id === action.task.id ? action.task : t) };
+    case 'ADD_TASK':    return { ...state, tasks: upsertById(state.tasks, action.task) };
+    case 'UPDATE_TASK': return { ...state, tasks: upsertById(state.tasks, action.task) };
     case 'REMOVE_TASK': return { ...state, tasks: state.tasks.filter(t => t.id !== action.id) };
     case 'ADD_TASK_COMMENT': {
       const tasks = state.tasks.map(t => {
         if (t.id !== action.taskId) return t;
-        return { ...t, comments: [...(t.comments || []), action.comment] };
+        const comments = t.comments || [];
+        if (comments.some((comment) => comment.id === action.comment.id)) return t;
+        return { ...t, comments: [...comments, action.comment] };
       });
       return { ...state, tasks };
     }
 
     case 'ADD_CHANNEL': {
-      const exists = state.channels.find(c => c.id === action.channel.id);
-      if (exists) return state;
-      return { ...state, channels: [...state.channels, action.channel] };
+      return { ...state, channels: upsertById(state.channels, action.channel, { prepend: false }) };
     }
     case 'ADD_MESSAGE': {
       const prev = state.channelMessages[action.channelId] || [];
+      if (prev.some((message) => message.id === action.message.id)) return state;
       return {
         ...state,
         channelMessages: { ...state.channelMessages, [action.channelId]: [...prev, action.message] },
       };
     }
     case 'UPDATE_MESSAGE': {
-      const msgs = (state.channelMessages[action.channelId] || []).map(m =>
-        m.id === action.message.id ? action.message : m
-      );
+      const prev = state.channelMessages[action.channelId] || [];
+      const exists = prev.some((message) => message.id === action.message.id);
+      const msgs = exists
+        ? prev.map((message) => (message.id === action.message.id ? action.message : message))
+        : [...prev, action.message];
       return { ...state, channelMessages: { ...state.channelMessages, [action.channelId]: msgs } };
     }
 
-    case 'ADD_ANNOUNCEMENT':    return { ...state, announcements: [action.ann, ...state.announcements] };
-    case 'UPDATE_ANNOUNCEMENT': return { ...state, announcements: state.announcements.map(a => a.id === action.ann.id ? action.ann : a) };
+    case 'ADD_ANNOUNCEMENT':    return { ...state, announcements: upsertById(state.announcements, action.ann) };
+    case 'UPDATE_ANNOUNCEMENT': return { ...state, announcements: upsertById(state.announcements, action.ann) };
     case 'REMOVE_ANNOUNCEMENT': return { ...state, announcements: state.announcements.filter(a => a.id !== action.id) };
 
-    case 'ADD_DOCUMENT':    return { ...state, documents: [action.doc, ...state.documents] };
+    case 'ADD_DOCUMENT':    return { ...state, documents: upsertById(state.documents, action.doc) };
     case 'REMOVE_DOCUMENT': return { ...state, documents: state.documents.filter(d => d.id !== action.id) };
 
-    case 'ADD_MEETING':    return { ...state, meetings: [action.meeting, ...state.meetings] };
-    case 'UPDATE_MEETING': return { ...state, meetings: state.meetings.map(m => m.id === action.meeting.id ? action.meeting : m) };
+    case 'ADD_MEETING':    return { ...state, meetings: upsertById(state.meetings, action.meeting) };
+    case 'UPDATE_MEETING': return { ...state, meetings: upsertById(state.meetings, action.meeting) };
     case 'REMOVE_MEETING': return { ...state, meetings: state.meetings.filter(m => m.id !== action.id) };
 
-    case 'ADD_USER':    return { ...state, users: [...state.users, action.user] };
-    case 'UPDATE_USER': {
-      const users = state.users.map(u => u.id === action.user.id ? action.user : u);
-      const currentUser = state.currentUser?.id === action.user.id ? action.user : state.currentUser;
-      return { ...state, users, currentUser };
-    }
+    case 'ADD_USER':    return { ...state, users: upsertById(state.users, action.user, { prepend: false }) };
+    case 'UPDATE_USER': return syncEmbeddedUser(state, action.user);
     case 'REMOVE_USER': return { ...state, users: state.users.filter(u => u.id !== action.id) };
 
     default: return state;
@@ -377,6 +485,102 @@ export function AppProvider({ children }) {
         try {
           const { id } = JSON.parse(e.data);
           dispatch({ type: 'REMOVE_ANNOUNCEMENT', id });
+        } catch {}
+      });
+
+      es.addEventListener('document:new', (e) => {
+        try {
+          const doc = JSON.parse(e.data);
+          dispatch({ type: 'ADD_DOCUMENT', doc });
+        } catch {}
+      });
+
+      es.addEventListener('document:delete', (e) => {
+        try {
+          const { id } = JSON.parse(e.data);
+          dispatch({ type: 'REMOVE_DOCUMENT', id });
+        } catch {}
+      });
+
+      es.addEventListener('task:new', (e) => {
+        try {
+          const task = JSON.parse(e.data);
+          if (state.currentUser.role === 'intern' && task.assigneeId !== state.currentUser.id) return;
+          dispatch({ type: 'ADD_TASK', task });
+        } catch {}
+      });
+
+      es.addEventListener('task:update', (e) => {
+        try {
+          const task = JSON.parse(e.data);
+          if (state.currentUser.role === 'intern' && task.assigneeId !== state.currentUser.id) {
+            dispatch({ type: 'REMOVE_TASK', id: task.id });
+            return;
+          }
+          dispatch({ type: 'UPDATE_TASK', task });
+        } catch {}
+      });
+
+      es.addEventListener('task:delete', (e) => {
+        try {
+          const { id } = JSON.parse(e.data);
+          dispatch({ type: 'REMOVE_TASK', id });
+        } catch {}
+      });
+
+      es.addEventListener('task:comment', (e) => {
+        try {
+          const { taskId, comment } = JSON.parse(e.data);
+          dispatch({ type: 'ADD_TASK_COMMENT', taskId, comment });
+        } catch {}
+      });
+
+      es.addEventListener('leave:new', (e) => {
+        try {
+          const leave = JSON.parse(e.data);
+          dispatch({ type: 'ADD_LEAVE', leave });
+        } catch {}
+      });
+
+      es.addEventListener('leave:update', (e) => {
+        try {
+          const leave = JSON.parse(e.data);
+          dispatch({ type: 'UPDATE_LEAVE', leave });
+        } catch {}
+      });
+
+      es.addEventListener('leave:delete', (e) => {
+        try {
+          const { id } = JSON.parse(e.data);
+          dispatch({ type: 'REMOVE_LEAVE', id });
+        } catch {}
+      });
+
+      es.addEventListener('attendance:upsert', (e) => {
+        try {
+          const record = JSON.parse(e.data);
+          dispatch({ type: 'UPSERT_ATTENDANCE', record });
+        } catch {}
+      });
+
+      es.addEventListener('user:new', (e) => {
+        try {
+          const user = JSON.parse(e.data);
+          dispatch({ type: 'ADD_USER', user });
+        } catch {}
+      });
+
+      es.addEventListener('user:update', (e) => {
+        try {
+          const user = JSON.parse(e.data);
+          dispatch({ type: 'UPDATE_USER', user });
+        } catch {}
+      });
+
+      es.addEventListener('user:delete', (e) => {
+        try {
+          const { id } = JSON.parse(e.data);
+          dispatch({ type: 'REMOVE_USER', id });
         } catch {}
       });
 

@@ -196,7 +196,7 @@ export default function Tasks() {
                         <div style={{ flex: 1, background: 'var(--bg-1)', borderRadius: 10, padding: '8px 12px' }}>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                             <span style={{ fontSize: 12, fontWeight: 600 }}>{u?.name}</span>
-                            <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>{timeAgo(c.at)}</span>
+                            <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>{timeAgo(c.createdAt || c.at)}</span>
                           </div>
                           <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.5 }}>{c.text}</p>
                         </div>

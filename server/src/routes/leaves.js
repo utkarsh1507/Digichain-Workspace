@@ -1,7 +1,16 @@
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
+const { broadcast } = require('../lib/events');
 const prisma = new PrismaClient();
+
+async function getFounderIds() {
+  const founders = await prisma.user.findMany({
+    where: { role: 'founder' },
+    select: { id: true },
+  });
+  return founders.map((user) => user.id);
+}
 
 // GET /api/leaves
 router.get('/', auth, async (req, res) => {
@@ -26,6 +35,8 @@ router.post('/', auth, async (req, res) => {
       data: { userId: req.user.id, type, fromDate, toDate, days, reason, appliedOn: today },
       include: { user: { select: { id: true, name: true, title: true, avatar: true } } }
     });
+    const targets = Array.from(new Set([req.user.id, ...(await getFounderIds())]));
+    broadcast('leave:new', leave, targets);
     res.json(leave);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -43,6 +54,8 @@ router.patch('/:id', auth, async (req, res) => {
       data: { status, approverId: req.user.id },
       include: { user: { select: { id: true, name: true, title: true, avatar: true } } }
     });
+    const targets = Array.from(new Set([leave.userId, ...(await getFounderIds())]));
+    broadcast('leave:update', leave, targets);
     res.json(leave);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -57,6 +70,8 @@ router.delete('/:id', auth, async (req, res) => {
     if (leave.userId !== req.user.id && req.user.role !== 'founder') return res.status(403).json({ error: 'Forbidden' });
     if (leave.status !== 'Pending' && req.user.role !== 'founder') return res.status(400).json({ error: 'Cannot cancel non-pending leave' });
     await prisma.leave.delete({ where: { id: req.params.id } });
+    const targets = Array.from(new Set([leave.userId, ...(await getFounderIds())]));
+    broadcast('leave:delete', { id: req.params.id }, targets);
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });

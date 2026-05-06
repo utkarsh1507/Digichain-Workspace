@@ -3,6 +3,7 @@ const path = require('path');
 const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
 const { uploadDocument: uploadDoc } = require('../lib/cloudinary');
+const { broadcast } = require('../lib/events');
 const prisma = new PrismaClient();
 
 // GET /api/documents
@@ -48,6 +49,7 @@ router.post('/upload', auth, uploadDoc.single('file'), async (req, res) => {
       },
       include: { uploader: { select: { id: true, name: true, avatar: true } } }
     });
+    broadcast('document:new', document);
     res.json(document);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -64,6 +66,7 @@ router.delete('/:id', auth, async (req, res) => {
     }
     // File lives in Cloudinary — no local file to delete
     await prisma.document.delete({ where: { id: req.params.id } });
+    broadcast('document:delete', { id: req.params.id });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });

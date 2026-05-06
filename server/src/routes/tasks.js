@@ -1,6 +1,7 @@
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
+const { broadcast } = require('../lib/events');
 const prisma = new PrismaClient();
 
 const include = {
@@ -29,7 +30,9 @@ router.post('/', auth, async (req, res) => {
       data: { title, description, priority, dueDate, status: status || 'Pending', assigneeId, reporterId: req.user.id, tags: JSON.stringify(tags || []) },
       include
     });
-    res.json({ ...task, tags: task.tags ? JSON.parse(task.tags) : [] });
+    const payload = { ...task, tags: task.tags ? JSON.parse(task.tags) : [] };
+    broadcast('task:new', payload);
+    res.json(payload);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -41,7 +44,9 @@ router.patch('/:id', auth, async (req, res) => {
     const { tags, ...data } = req.body;
     if (tags !== undefined) data.tags = JSON.stringify(tags);
     const task = await prisma.task.update({ where: { id: req.params.id }, data, include });
-    res.json({ ...task, tags: task.tags ? JSON.parse(task.tags) : [] });
+    const payload = { ...task, tags: task.tags ? JSON.parse(task.tags) : [] };
+    broadcast('task:update', payload);
+    res.json(payload);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -52,6 +57,7 @@ router.delete('/:id', auth, async (req, res) => {
   try {
     if (req.user.role === 'intern') return res.status(403).json({ error: 'Forbidden' });
     await prisma.task.delete({ where: { id: req.params.id } });
+    broadcast('task:delete', { id: req.params.id });
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -65,6 +71,7 @@ router.post('/:id/comments', auth, async (req, res) => {
       data: { taskId: req.params.id, userId: req.user.id, text: req.body.text },
       include: { user: { select: { id: true, name: true, avatar: true } } }
     });
+    broadcast('task:comment', { taskId: req.params.id, comment });
     res.json(comment);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });

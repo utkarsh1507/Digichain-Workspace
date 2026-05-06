@@ -15,6 +15,7 @@ export default function Leave() {
   const { state, applyLeave, updateLeaveStatus, deleteLeave } = useApp();
   const { currentUser, leaves, users } = state;
   const isFounder = currentUser?.role === 'founder';
+  const founder = users.find(u => u.role === 'founder');
   const [tab, setTab] = useState(isFounder ? 'all' : 'mine');
   const [applyOpen, setApplyOpen] = useState(false);
   const [form, setForm] = useState({ type: 'Casual', fromDate: '', toDate: '', reason: '' });
@@ -187,10 +188,10 @@ export default function Leave() {
             )}
             <Textarea label="Reason" value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} placeholder="Brief reason for your leave…" required />
             <div style={{ padding: '12px 14px', background: 'var(--bg-1)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
-              <Avatar name={users.find(u => u.role === 'founder')?.name || ''} size={28} />
+              <Avatar name={founder?.name || ''} size={28} src={founder?.avatar} />
               <div style={{ fontSize: 12 }}>
                 <span style={{ fontWeight: 600 }}>Approver: </span>
-                <span style={{ color: 'var(--fg-2)' }}>{users.find(u => u.role === 'founder')?.name}</span>
+                <span style={{ color: 'var(--fg-2)' }}>{founder?.name}</span>
                 <span style={{ color: 'var(--fg-3)' }}> · Avg response 4h</span>
               </div>
             </div>

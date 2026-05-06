@@ -1,7 +1,16 @@
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
+const { broadcast } = require('../lib/events');
 const prisma = new PrismaClient();
+
+async function getAttendanceTargets(userId) {
+  const founders = await prisma.user.findMany({
+    where: { role: 'founder' },
+    select: { id: true },
+  });
+  return Array.from(new Set([userId, ...founders.map((user) => user.id)]));
+}
 
 // GET /api/attendance — all (founder) or own
 router.get('/', auth, async (req, res) => {
@@ -41,8 +50,10 @@ router.post('/signin', auth, async (req, res) => {
     if (existing) return res.status(409).json({ error: 'Already signed in today' });
 
     const record = await prisma.attendance.create({
-      data: { userId: req.user.id, date: today, signIn: time, status: 'Present', location: location || 'Office' }
+      data: { userId: req.user.id, date: today, signIn: time, status: 'Present', location: location || 'Office' },
+      include: { user: { select: { id: true, name: true, title: true, avatar: true } } }
     });
+    broadcast('attendance:upsert', record, await getAttendanceTargets(req.user.id));
     res.json(record);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -68,8 +79,10 @@ router.post('/signout', auth, async (req, res) => {
 
     const updated = await prisma.attendance.update({
       where: { userId_date: { userId: req.user.id, date: today } },
-      data: { signOut, hours }
+      data: { signOut, hours },
+      include: { user: { select: { id: true, name: true, title: true, avatar: true } } }
     });
+    broadcast('attendance:upsert', updated, await getAttendanceTargets(req.user.id));
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });

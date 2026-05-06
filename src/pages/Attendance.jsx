@@ -62,6 +62,7 @@ export default function Attendance() {
     setBusy(false);
   }
   async function handleSignOut() {
+    if (!window.confirm('Are you sure you want to sign out for today?')) return;
     setBusy(true);
     try { await signOut(); } catch (e) { alert(e.message); }
     setBusy(false);
@@ -159,7 +160,7 @@ export default function Attendance() {
             {teamToday.map(({ user: u, rec }) => (
               <div key={u.id} style={{ display: 'grid', gridTemplateColumns: '40px 1.5fr 1fr 1fr 1fr 1fr', gap: 12,
                 alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid var(--border-1)' }}>
-                <Avatar name={u.name} size={30} />
+                <Avatar name={u.name} size={30} src={u.avatar} />
                 <div>
                   <div style={{ fontSize: 13, fontWeight: 600 }}>{u.name}</div>
                   <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>{u.title}</div>

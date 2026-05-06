@@ -103,7 +103,7 @@ export default function Announcements() {
 }
 
 function AnnouncementCard({ a, users, currentUser, onReact, isFounder, onPin, onDelete }) {
-  const author = a.author || users.find(u => u.id === a.authorId);
+  const author = users.find(u => u.id === a.authorId) || a.author;
   const [expanded, setExpanded] = useState(false);
   const body = a.content || a.body || '';
   const isLong = body.length > 300;
@@ -122,7 +122,7 @@ function AnnouncementCard({ a, users, currentUser, onReact, isFounder, onPin, on
               <h3 style={{ margin: '0 0 4px', fontSize: 16, fontWeight: 700, letterSpacing: '-0.01em' }}>{a.title}</h3>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)' }}>{author?.name}</span>
-                <Pill tone="accent">{author?.role}</Pill>
+                <Pill tone="accent">{author?.role || 'member'}</Pill>
                 <Pill tone={catColors[a.category] || 'neutral'}>{a.category}</Pill>
                 {a.pinned && <Pill tone="accent" icon={Pin}>Pinned</Pill>}
                 <span style={{ fontSize: 11, color: 'var(--fg-4)', marginLeft: 'auto' }}>{timeAgo(a.createdAt)}</span>

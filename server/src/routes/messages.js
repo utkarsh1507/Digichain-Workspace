@@ -241,12 +241,18 @@ router.post('/dm/ensure', auth, async (req, res) => {
     const dmName = `dm:${ids.join(':')}`;
 
     let channel = await prisma.channel.findFirst({ where: { name: dmName } });
+    let created = false;
     if (!channel) {
       channel = await prisma.channel.create({
         data: { name: dmName, type: 'dm', memberIds: JSON.stringify(ids) }
       });
+      created = true;
     }
-    res.json(parseChannel(channel));
+    const parsed = parseChannel(channel);
+    if (created) {
+      broadcast('channel:new', parsed, parsed.memberIds);
+    }
+    res.json(parsed);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
