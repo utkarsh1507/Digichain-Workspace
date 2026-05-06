@@ -239,7 +239,7 @@ export function Shell({ children }) {
                   style={{ width: '100%', height: 34, borderRadius: 8, border: '1px solid var(--border-1)', padding: '0 8px',
                     background: '#fff', color: 'var(--fg-1)', fontFamily: 'inherit', fontSize: 12, outline: 'none' }}>
                   {STATUS_PRESETS.map((preset) => (
-                    <option key={preset.value} value={preset.value}>{preset.label}</option>
+                    <option key={preset.value} value={preset.value}>{preset.emoji} {preset.label}</option>
                   ))}
                 </select>
                 {statusDraft.statusPreset === 'custom' && (
@@ -312,7 +312,7 @@ export function Shell({ children }) {
         </header>
 
         {/* Content */}
-        <main style={{ flex: 1, overflow: 'auto', padding: '28px 32px' }}>
+        <main style={{ flex: 1, overflow: location.pathname === '/messages' ? 'hidden' : 'auto', padding: '28px 32px' }}>
           {children}
         </main>
       </div>

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2, Edit3, Save, Users, ShieldCheck, UserCheck, TrendingUp, Lock } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Card, StatCard, Button, IconBtn, Pill, Eyebrow, Section, Modal, Input, Select, Avatar, fmtDate } from '../components/ui';
@@ -48,6 +49,7 @@ function getPasswordError(password) {
 export default function AdminPanel() {
   const { state, createUser, updateUser, deleteUser, updateLeaveStatus } = useApp();
   const { currentUser, users, tasks, leaves, attendance } = state;
+  const navigate = useNavigate();
 
   if (currentUser?.role !== 'founder') {
     return (
@@ -165,7 +167,11 @@ export default function AdminPanel() {
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
               <Avatar name={u.name} size={36} src={u.avatar} />
               <div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg-1)' }}>{u.name}</div>
+                <div
+                  onClick={() => navigate(`/profile/${u.id}`)}
+                  style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg-1)', cursor: 'pointer' }}>
+                  {u.name}
+                </div>
                 <div style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 1 }}>{u.email}</div>
                 <div style={{ fontSize: 11, color: 'var(--fg-4)', marginTop: 1 }}>{u.title}</div>
               </div>

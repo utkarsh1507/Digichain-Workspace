@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
+import { useParams } from 'react-router-dom';
 import { Camera, Edit3, Save, X, Mail, Phone, Briefcase, Building2, Calendar, User, Key, Lock, Eye, EyeOff } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Card, Button, Input, Textarea, Select, Pill, Eyebrow, Divider, Avatar, fmtDate } from '../components/ui';
@@ -14,9 +15,13 @@ const LEAVE_TYPES = [
 
 export default function Profile() {
   const { state, updateUser, uploadAvatar, addToast } = useApp();
-  const { currentUser, leaves, attendance, tasks } = state;
+  const { currentUser, users, leaves, attendance, tasks } = state;
+  const { id } = useParams();
+  const profileUser = id ? users.find(u => u.id === id) : currentUser;
+  const isOwnProfile = profileUser?.id === currentUser?.id;
+  const canEditProfile = !!profileUser && (isOwnProfile || currentUser?.role === 'founder');
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ ...currentUser });
+  const [form, setForm] = useState({ ...profileUser });
   const [saving, setSaving] = useState(false);
   const photoRef = useRef();
 
@@ -28,10 +33,14 @@ export default function Profile() {
   const [showPw, setShowPw] = useState({ current: false, next: false, confirm: false });
 
   useEffect(() => {
-    if (!editing && currentUser) {
-      setForm({ ...currentUser });
+    if (!editing && profileUser) {
+      setForm({ ...profileUser });
     }
-  }, [currentUser, editing]);
+  }, [profileUser, editing]);
+
+  useEffect(() => {
+    setEditing(false);
+  }, [profileUser?.id]);
 
   async function handleChangePassword(e) {
     e.preventDefault();
@@ -61,37 +70,50 @@ export default function Profile() {
   }
 
   if (!currentUser) return null;
+  if (!profileUser) {
+    return (
+      <div style={{ maxWidth: 720, margin: '0 auto', padding: 32 }}>
+        <Card style={{ padding: 28, textAlign: 'center' }}>
+          <h2 style={{ margin: 0, fontSize: 20 }}>Profile not found</h2>
+          <p style={{ margin: '8px 0 0', color: 'var(--fg-3)', fontSize: 14 }}>This teammate may no longer be in the workspace.</p>
+        </Card>
+      </div>
+    );
+  }
 
-  const myLeaves = leaves.filter(l => l.userId === currentUser.id && l.status === 'Approved');
+  const myLeaves = leaves.filter(l => l.userId === profileUser.id && l.status === 'Approved');
   const myUsage = {};
   myLeaves.forEach(l => { myUsage[l.type] = (myUsage[l.type] || 0) + (l.days || 0); });
 
-  const myTasks = tasks.filter(t => t.assigneeId === currentUser.id);
-  const myAttendance = attendance.filter(a => a.userId === currentUser.id);
+  const myTasks = tasks.filter(t => t.assigneeId === profileUser.id);
+  const myAttendance = attendance.filter(a => a.userId === profileUser.id);
   const presentDays = myAttendance.filter(a => a.status === 'Present').length;
 
   async function handlePhotoChange(e) {
     const file = e.target.files[0];
     if (!file) return;
-    try { await uploadAvatar(currentUser.id, file); } catch (err) { alert(err.message); }
+    if (!canEditProfile) return;
+    try { await uploadAvatar(profileUser.id, file); } catch (err) { alert(err.message); }
   }
 
   async function handleSave() {
+    if (!canEditProfile) return;
     setSaving(true);
     try {
-      await updateUser(currentUser.id, form);
+      await updateUser(profileUser.id, form);
       setEditing(false);
     } catch (err) { alert(err.message); }
     setSaving(false);
   }
 
   function handleCancel() {
-    setForm({ ...currentUser });
+    setForm({ ...profileUser });
     setEditing(false);
   }
 
   const roleColors = { founder: 'accent', employee: 'info', intern: 'success' };
-  const myPresence = getPresence(currentUser);
+  const myPresence = getPresence(profileUser);
+  const profileFirstName = profileUser.name?.split(' ')[0] || 'This teammate';
 
   return (
     <div style={{ display: 'flex', gap: 28, maxWidth: 1100, margin: '0 auto' }} className="fade-in">
@@ -101,31 +123,33 @@ export default function Profile() {
         <Card style={{ padding: 24, textAlign: 'center' }}>
           {/* Avatar */}
           <div style={{ position: 'relative', width: 100, height: 100, margin: '0 auto 16px' }}>
-            <Avatar name={currentUser.name} size={100} src={currentUser.avatar} status={myPresence.state} ring />
-            <button onClick={() => photoRef.current?.click()}
-              style={{ position: 'absolute', bottom: 2, right: 2, width: 30, height: 30, borderRadius: '50%',
-                background: 'var(--brand-gradient)', border: '2px solid #fff',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-              <Camera size={14} color="#fff" />
-            </button>
+            <Avatar name={profileUser.name} size={100} src={profileUser.avatar} status={myPresence.state} ring />
+            {canEditProfile && (
+              <button onClick={() => photoRef.current?.click()}
+                style={{ position: 'absolute', bottom: 2, right: 2, width: 30, height: 30, borderRadius: '50%',
+                  background: 'var(--brand-gradient)', border: '2px solid #fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                <Camera size={14} color="#fff" />
+              </button>
+            )}
             <input ref={photoRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handlePhotoChange} />
           </div>
 
-          <h2 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 700 }}>{currentUser.name}</h2>
-          <div style={{ fontSize: 13, color: 'var(--fg-2)', marginBottom: 8 }}>{currentUser.title}</div>
+          <h2 style={{ margin: '0 0 4px', fontSize: 20, fontWeight: 700 }}>{profileUser.name}</h2>
+          <div style={{ fontSize: 13, color: 'var(--fg-2)', marginBottom: 8 }}>{profileUser.title}</div>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginBottom: 16 }}>
-            <Pill tone={roleColors[currentUser.role] || 'neutral'}>{currentUser.role}</Pill>
-            <Pill tone="neutral">{currentUser.department}</Pill>
+            <Pill tone={roleColors[profileUser.role] || 'neutral'}>{profileUser.role}</Pill>
+            <Pill tone="neutral">{profileUser.department}</Pill>
           </div>
           <Pill tone={myPresence.state === 'online' ? 'success' : myPresence.state === 'away' ? 'warning' : 'neutral'} dot>
-            {getStatusText(currentUser)} · {myPresence.detail}
+            {getStatusText(profileUser)} · {myPresence.detail}
           </Pill>
           <Divider />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14, fontSize: 13 }}>
             {[
-              { icon: Mail, label: currentUser.email },
-              { icon: Phone, label: currentUser.phone || 'Not set' },
-              { icon: Calendar, label: `Joined ${fmtDate(currentUser.joinDate)}` },
+              { icon: Mail, label: profileUser.email },
+              { icon: Phone, label: profileUser.phone || 'Not set' },
+              { icon: Calendar, label: `Joined ${fmtDate(profileUser.joinDate)}` },
             ].map((item, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--fg-2)' }}>
                 <item.icon size={14} color="var(--fg-4)" />
@@ -137,7 +161,7 @@ export default function Profile() {
 
         {/* Stats */}
         <Card style={{ padding: 18 }}>
-          <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 600 }}>Your Stats</h3>
+          <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 600 }}>{isOwnProfile ? 'Your Stats' : `${profileFirstName}'s Stats`}</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
             {[
               { label: 'Tasks completed', value: myTasks.filter(t => t.status === 'Completed').length },
@@ -155,7 +179,7 @@ export default function Profile() {
 
         {/* Leave balance */}
         <Card style={{ padding: 18 }}>
-          <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 600 }}>Leave Balance</h3>
+          <h3 style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 600 }}>{isOwnProfile ? 'Leave Balance' : 'Leave Usage'}</h3>
           {LEAVE_TYPES.map(lt => {
             const used = myUsage[lt.id] || 0;
             const remaining = lt.total === 999 ? '∞' : lt.total - used;
@@ -186,7 +210,7 @@ export default function Profile() {
               <h2 style={{ margin: '4px 0 0', fontSize: 22, fontWeight: 700 }}>Personal Information</h2>
             </div>
             {!editing
-              ? <Button variant="secondary" icon={Edit3} onClick={() => setEditing(true)}>Edit Profile</Button>
+              ? canEditProfile && <Button variant="secondary" icon={Edit3} onClick={() => setEditing(true)}>Edit Profile</Button>
               : <div style={{ display: 'flex', gap: 8 }}>
                   <Button variant="ghost" icon={X} onClick={handleCancel}>Cancel</Button>
                   <Button variant="primary" icon={Save} onClick={handleSave} disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</Button>
@@ -204,7 +228,7 @@ export default function Profile() {
                   options={DEPARTMENTS.map(d => ({ value: d, label: d }))} />
                 <Input label="Join Date" value={form.joinDate || ''} onChange={e => setForm(f => ({ ...f, joinDate: e.target.value }))} type="date" icon={Calendar} />
                 <Select label="Workspace Status" value={form.statusPreset || 'working'} onChange={e => setForm(f => ({ ...f, statusPreset: e.target.value }))}
-                  options={STATUS_PRESETS.map(s => ({ value: s.value, label: s.label }))} />
+                  options={STATUS_PRESETS.map(s => ({ value: s.value, label: `${s.emoji} ${s.label}` }))} />
                 <Input label="Custom Status Message" value={form.statusMessage || ''} onChange={e => setForm(f => ({ ...f, statusMessage: e.target.value }))} disabled={(form.statusPreset || 'working') !== 'custom'} />
               </div>
               <Textarea label="Bio" value={form.bio || ''} onChange={e => setForm(f => ({ ...f, bio: e.target.value }))} placeholder="Tell your team about yourself…" rows={3} />
@@ -212,12 +236,12 @@ export default function Profile() {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
               {[
-                { icon: User, label: 'Full Name', value: currentUser.name },
-                { icon: Briefcase, label: 'Job Title', value: currentUser.title },
-                { icon: Mail, label: 'Email', value: currentUser.email },
-                { icon: Phone, label: 'Phone', value: currentUser.phone || 'Not set' },
-                { icon: Building2, label: 'Department', value: currentUser.department },
-                { icon: Calendar, label: 'Join Date', value: fmtDate(currentUser.joinDate) },
+                { icon: User, label: 'Full Name', value: profileUser.name },
+                { icon: Briefcase, label: 'Job Title', value: profileUser.title },
+                { icon: Mail, label: 'Email', value: profileUser.email },
+                { icon: Phone, label: 'Phone', value: profileUser.phone || 'Not set' },
+                { icon: Building2, label: 'Department', value: profileUser.department },
+                { icon: Calendar, label: 'Join Date', value: fmtDate(profileUser.joinDate) },
               ].map((item, i) => (
                 <div key={i} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
                   <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--bg-2)',
@@ -230,10 +254,10 @@ export default function Profile() {
                   </div>
                 </div>
               ))}
-              {currentUser.bio && (
+              {profileUser.bio && (
                 <div style={{ gridColumn: '1 / -1' }}>
                   <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 6 }}>Bio</div>
-                  <p style={{ margin: 0, fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.65 }}>{currentUser.bio}</p>
+                  <p style={{ margin: 0, fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.65 }}>{profileUser.bio}</p>
                 </div>
               )}
             </div>
@@ -241,7 +265,7 @@ export default function Profile() {
         </Card>
 
         {/* Security / Password */}
-        <Card style={{ padding: 24 }}>
+        {isOwnProfile && <Card style={{ padding: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: pwOpen ? 18 : 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--accent-tint)',
@@ -300,7 +324,7 @@ export default function Profile() {
               </div>
             </form>
           )}
-        </Card>
+        </Card>}
 
         {/* Recent activity */}
         <Card style={{ padding: 20 }}>

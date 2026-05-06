@@ -171,7 +171,10 @@ export default function Dashboard() {
               const presence = getPresence(u);
               return (
               <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
-                borderBottom: i < teamMembers.length - 1 ? '1px solid var(--border-1)' : 'none' }}>
+                borderBottom: i < teamMembers.length - 1 ? '1px solid var(--border-1)' : 'none', cursor: 'pointer' }}
+                onClick={() => navigate(`/profile/${u.id}`)}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-1)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
                 <Avatar name={u.name} size={34} src={u.avatar} status={presence.state} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-1)' }}>{u.name}</div>

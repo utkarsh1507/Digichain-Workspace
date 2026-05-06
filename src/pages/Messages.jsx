@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Hash, Plus, Send, Paperclip, Video, Search, Users, X, File, Image, CheckCheck, ExternalLink, Smile, Trash2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar, IconBtn, Button, Empty, Modal, Input, fmtTime } from '../components/ui';
@@ -15,6 +16,7 @@ export default function Messages() {
     ensureDm, createChannel, deleteChannel, markChannelRead, addToast, setActiveChannel,
   } = useApp();
   const { currentUser, channels, channelMessages, channelSeenBy, users, typingByChannel } = state;
+  const navigate = useNavigate();
 
   const [activeId, setActiveId] = useState(null);
   const [draft, setDraft] = useState('');
@@ -323,7 +325,7 @@ export default function Messages() {
     <div style={{
       display: 'grid',
       gridTemplateColumns: '280px 1fr',
-      height: 'calc(100vh - 56px)',
+      height: 'calc(100vh - 112px)',
       border: '1px solid var(--border-1)',
       borderRadius: 16,
       overflow: 'hidden',
@@ -400,13 +402,22 @@ export default function Messages() {
               justifyContent: 'space-between', flexShrink: 0, background: '#fff' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {active.type === 'dm'
-                  ? <Avatar name={getConvName(active)} size={32} src={activeOtherUser?.avatar} status={activePresence.state} />
+                  ? <button
+                      onClick={() => activeOtherUser && navigate(`/profile/${activeOtherUser.id}`)}
+                      title="View profile"
+                      style={{ border: 'none', background: 'transparent', padding: 0, cursor: activeOtherUser ? 'pointer' : 'default', display: 'inline-flex' }}>
+                      <Avatar name={getConvName(active)} size={32} src={activeOtherUser?.avatar} status={activePresence.state} />
+                    </button>
                   : <span style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--accent-tint)', display: 'inline-flex',
                       alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700 }}>
                       <Hash size={15} />
                     </span>}
                 <div>
-                  <div style={{ fontSize: 15, fontWeight: 600 }}>{getConvName(active)}</div>
+                  <div
+                    onClick={() => active.type === 'dm' && activeOtherUser && navigate(`/profile/${activeOtherUser.id}`)}
+                    style={{ fontSize: 15, fontWeight: 600, cursor: active.type === 'dm' && activeOtherUser ? 'pointer' : 'default' }}>
+                    {getConvName(active)}
+                  </div>
                   {active.type === 'channel' && (
                     <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>
                       {(active.memberIds || []).length} members{active.description ? ` · ${active.description}` : ''}

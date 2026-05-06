@@ -1,9 +1,9 @@
 export const STATUS_PRESETS = [
-  { value: 'working', label: 'Working', tone: 'success' },
-  { value: 'on-break', label: 'On break', tone: 'warning' },
-  { value: 'on-leave', label: 'On leave', tone: 'danger' },
-  { value: 'busy', label: 'Busy', tone: 'info' },
-  { value: 'custom', label: 'Custom', tone: 'accent' },
+  { value: 'working', label: 'Working', emoji: '💻', tone: 'success' },
+  { value: 'on-break', label: 'On break', emoji: '☕', tone: 'warning' },
+  { value: 'on-leave', label: 'On leave', emoji: '🌴', tone: 'danger' },
+  { value: 'busy', label: 'Busy', emoji: '⛔', tone: 'info' },
+  { value: 'custom', label: 'Custom', emoji: '✨', tone: 'accent' },
 ];
 
 const STATUS_BY_VALUE = Object.fromEntries(STATUS_PRESETS.map((status) => [status.value, status]));
@@ -16,8 +16,9 @@ export function getStatusMeta(value) {
 
 export function getStatusText(user) {
   if (!user) return '';
-  if (user.statusPreset === 'custom' && user.statusMessage) return user.statusMessage;
-  return getStatusMeta(user.statusPreset).label;
+  const meta = getStatusMeta(user.statusPreset);
+  if (user.statusPreset === 'custom' && user.statusMessage) return `${meta.emoji} ${user.statusMessage}`;
+  return `${meta.emoji} ${meta.label}`;
 }
 
 function minutesAgo(ms) {

@@ -49,6 +49,7 @@ export default function App() {
       <Route path="/documents"     element={<Protected><Documents /></Protected>} />
       <Route path="/meetings"      element={<Protected><Meetings /></Protected>} />
       <Route path="/profile"       element={<Protected><Profile /></Protected>} />
+      <Route path="/profile/:id"    element={<Protected><Profile /></Protected>} />
       <Route path="/admin"         element={<Protected><AdminPanel /></Protected>} />
       <Route path="*"              element={<Navigate to={state.currentUser ? '/dashboard' : '/login'} replace />} />
     </Routes>
