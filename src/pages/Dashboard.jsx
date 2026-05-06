@@ -10,6 +10,7 @@ import {
   Eyebrow, Section, Divider, Empty, priorityTone, statusTone, timeAgo, fmtDate
 } from '../components/ui';
 import { normalizeMeetLink } from '../utils/meet';
+import { getPresence, getStatusText } from '../utils/presence';
 
 function greet(name) {
   const h = new Date().getHours();
@@ -47,7 +48,7 @@ export default function Dashboard() {
   const totalLeaveUsed = myApprovedLeaves.reduce((s, l) => s + (l.days || 0), 0);
   const leaveBalance = 38 - totalLeaveUsed;
 
-  const teamOnline = users.filter(u => u.id !== currentUser?.id);
+  const teamMembers = users.filter(u => u.id !== currentUser?.id);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 28, maxWidth: 1280, margin: '0 auto' }} className="fade-in">
@@ -166,19 +167,21 @@ export default function Dashboard() {
         {/* Team */}
         <Section title="Team">
           <Card padded={false}>
-            {teamOnline.map((u, i) => (
+            {teamMembers.map((u, i) => {
+              const presence = getPresence(u);
+              return (
               <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
-                borderBottom: i < teamOnline.length - 1 ? '1px solid var(--border-1)' : 'none' }}>
-                <Avatar name={u.name} size={34} src={u.avatar} status="online" />
+                borderBottom: i < teamMembers.length - 1 ? '1px solid var(--border-1)' : 'none' }}>
+                <Avatar name={u.name} size={34} src={u.avatar} status={presence.state} />
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-1)' }}>{u.name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>{u.title}</div>
+                  <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>{getStatusText(u)} · {presence.detail}</div>
                 </div>
                 <Pill tone={u.role === 'founder' ? 'accent' : u.role === 'intern' ? 'success' : 'neutral'}>
                   {u.role}
                 </Pill>
               </div>
-            ))}
+            );})}
           </Card>
         </Section>
       </div>

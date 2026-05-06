@@ -861,6 +861,30 @@ export function AppProvider({ children }) {
     dispatch({ type: 'UPDATE_USER', user });
     return user;
   }
+  async function refreshPresence() {
+    const user = await usersApi.presence();
+    dispatch({ type: 'UPDATE_USER', user });
+    return user;
+  }
+
+  useEffect(() => {
+    if (!state.currentUser) return;
+    let stopped = false;
+    const beat = () => {
+      if (stopped || document.visibilityState === 'hidden') return;
+      refreshPresence().catch(() => {});
+    };
+    beat();
+    const interval = setInterval(beat, 60 * 1000);
+    window.addEventListener('focus', beat);
+    document.addEventListener('visibilitychange', beat);
+    return () => {
+      stopped = true;
+      clearInterval(interval);
+      window.removeEventListener('focus', beat);
+      document.removeEventListener('visibilitychange', beat);
+    };
+  }, [state.currentUser?.id]); // eslint-disable-line
 
   const value = {
     state,
@@ -878,7 +902,7 @@ export function AppProvider({ children }) {
     createAnnouncement, updateAnnouncement, deleteAnnouncement, reactToAnnouncement,
     uploadDocument, deleteDocument,
     createMeeting, updateMeeting, deleteMeeting,
-    createUser, updateUser, deleteUser, uploadAvatar,
+    createUser, updateUser, deleteUser, uploadAvatar, refreshPresence,
   };
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

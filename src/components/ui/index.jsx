@@ -17,15 +17,16 @@ export function Avatar({ name = '?', size = 32, src, status, ring, gradient }) {
       background: bg, color: '#fff', flexShrink: 0,
       fontSize: Math.round(size * 0.38), fontWeight: 700,
       display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-      border: ring ? '2px solid #fff' : 'none', overflow: src ? 'hidden' : 'visible',
+      border: ring ? '2px solid #fff' : 'none', overflow: 'visible',
     }}>
       {src ? <img src={src} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} /> : initials}
       {status && (
         <span style={{
-          position: 'absolute', bottom: ring ? -1 : 0, right: ring ? -1 : 0,
-          width: Math.max(8, Math.round(size * 0.28)), height: Math.max(8, Math.round(size * 0.28)),
+          position: 'absolute', bottom: Math.max(1, Math.round(size * 0.04)), right: Math.max(1, Math.round(size * 0.04)),
+          width: Math.max(8, Math.round(size * 0.24)), height: Math.max(8, Math.round(size * 0.24)),
           borderRadius: '50%', border: '2px solid #fff',
           background: status === 'online' ? '#16a371' : status === 'away' ? '#d97706' : '#9a9aa8',
+          boxShadow: '0 0 0 1px rgba(14,14,20,0.06)',
         }} />
       )}
     </span>

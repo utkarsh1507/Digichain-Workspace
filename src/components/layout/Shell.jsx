@@ -8,6 +8,7 @@ import {
 import { useApp } from '../../context/AppContext';
 import { Avatar, IconBtn, NotificationToast, Modal, Button } from '../ui';
 import { requestNotificationPermission, getNotificationPermission } from '../../utils/notifications';
+import { STATUS_PRESETS, getPresence, getStatusMeta, getStatusText, getUserSubtitle } from '../../utils/presence';
 
 const NAV = [
   {
@@ -72,7 +73,7 @@ function NavItem({ icon: Icon, label, path, active, onClick, badge }) {
 }
 
 export function Shell({ children }) {
-  const { state, logout, toasts, dismissToast } = useApp();
+  const { state, logout, toasts, dismissToast, updateUser } = useApp();
   const { currentUser, leaves, unreadCounts, announcements } = state;
   const navigate = useNavigate();
   const location = useLocation();
@@ -80,6 +81,8 @@ export function Shell({ children }) {
   const [searchVal, setSearchVal] = useState('');
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [showNotifyPrompt, setShowNotifyPrompt] = useState(false);
+  const [statusDraft, setStatusDraft] = useState({ statusPreset: 'working', statusMessage: '' });
+  const [savingStatus, setSavingStatus] = useState(false);
 
   // Ask for desktop notification permission on first mount (one-time soft prompt)
   useEffect(() => {
@@ -97,6 +100,29 @@ export function Shell({ children }) {
     await requestNotificationPermission();
     setShowNotifyPrompt(false);
     localStorage.setItem('dw_notify_prompt_dismissed', '1');
+  }
+
+  useEffect(() => {
+    if (!currentUser) return;
+    setStatusDraft({
+      statusPreset: currentUser.statusPreset || 'working',
+      statusMessage: currentUser.statusMessage || '',
+    });
+  }, [currentUser?.id, currentUser?.statusPreset, currentUser?.statusMessage]);
+
+  async function saveStatus(next = statusDraft) {
+    if (!currentUser || savingStatus) return;
+    setSavingStatus(true);
+    try {
+      await updateUser(currentUser.id, {
+        statusPreset: next.statusPreset,
+        statusMessage: next.statusPreset === 'custom' ? next.statusMessage : '',
+      });
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setSavingStatus(false);
+    }
   }
   function dismissNotifyPrompt() {
     setShowNotifyPrompt(false);
@@ -124,6 +150,8 @@ export function Shell({ children }) {
   const navGroups = currentUser?.role === 'founder'
     ? [...NAV, ...FOUNDER_NAV]
     : NAV;
+  const myPresence = getPresence(currentUser);
+  const myStatusMeta = getStatusMeta(currentUser?.statusPreset);
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: 'var(--bg-0)', overflow: 'hidden' }}>
@@ -175,10 +203,10 @@ export function Shell({ children }) {
               borderRadius: 10, cursor: 'pointer', transition: 'background 120ms' }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-3)'}
             onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-            <Avatar name={currentUser?.name || ''} size={36} src={currentUser?.avatar} status="online" />
+            <Avatar name={currentUser?.name || ''} size={36} src={currentUser?.avatar} status={myPresence.state} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{currentUser?.name}</div>
-              <div style={{ fontSize: 11, color: 'var(--fg-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{currentUser?.title}</div>
+              <div style={{ fontSize: 11, color: 'var(--fg-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{getUserSubtitle(currentUser)}</div>
             </div>
             <ChevronUp size={14} color="var(--fg-3)" style={{ transform: profileOpen ? 'rotate(0)' : 'rotate(180deg)', transition: 'transform 180ms' }} />
           </div>
@@ -186,6 +214,50 @@ export function Shell({ children }) {
             <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, background: '#fff',
               border: '1px solid var(--border-1)', borderRadius: 12, boxShadow: 'var(--shadow-md)',
               padding: 8, marginBottom: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <div style={{ padding: '8px 10px 10px', borderRadius: 10, background: 'var(--bg-1)', marginBottom: 4 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <span style={{
+                    width: 8, height: 8, borderRadius: 999,
+                    background: myPresence.state === 'online' ? '#16a371' : myPresence.state === 'away' ? '#d97706' : '#9a9aa8',
+                    flexShrink: 0,
+                  }} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--fg-1)' }}>{getStatusText(currentUser)}</div>
+                    <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>{myPresence.detail}</div>
+                  </div>
+                  <span style={{ marginLeft: 'auto', fontSize: 10, fontWeight: 700, color: `var(--${myStatusMeta.tone === 'success' ? 'success' : 'accent'})` }}>
+                    {myStatusMeta.label}
+                  </span>
+                </div>
+                <select
+                  value={statusDraft.statusPreset}
+                  onChange={(e) => {
+                    const next = { ...statusDraft, statusPreset: e.target.value };
+                    setStatusDraft(next);
+                    if (e.target.value !== 'custom') saveStatus(next);
+                  }}
+                  style={{ width: '100%', height: 34, borderRadius: 8, border: '1px solid var(--border-1)', padding: '0 8px',
+                    background: '#fff', color: 'var(--fg-1)', fontFamily: 'inherit', fontSize: 12, outline: 'none' }}>
+                  {STATUS_PRESETS.map((preset) => (
+                    <option key={preset.value} value={preset.value}>{preset.label}</option>
+                  ))}
+                </select>
+                {statusDraft.statusPreset === 'custom' && (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+                    <input
+                      value={statusDraft.statusMessage}
+                      onChange={(e) => setStatusDraft((s) => ({ ...s, statusMessage: e.target.value }))}
+                      placeholder="What's your status?"
+                      maxLength={80}
+                      style={{ flex: 1, minWidth: 0, height: 32, borderRadius: 8, border: '1px solid var(--border-1)', padding: '0 8px',
+                        background: '#fff', color: 'var(--fg-1)', fontFamily: 'inherit', fontSize: 12, outline: 'none' }}
+                    />
+                    <Button size="sm" variant="primary" onClick={() => saveStatus()} disabled={savingStatus}>
+                      Save
+                    </Button>
+                  </div>
+                )}
+              </div>
               {[
                 { icon: User, label: 'My Profile', action: () => { navigate('/profile'); setProfileOpen(false); } },
                 { icon: Settings, label: 'Settings', action: () => { navigate('/profile'); setProfileOpen(false); } },
@@ -235,7 +307,7 @@ export function Shell({ children }) {
           />
           <IconBtn icon={User} title="Profile" onClick={() => navigate('/profile')} />
           <div style={{ width: 1, height: 24, background: 'var(--border-1)' }} />
-          <Avatar name={currentUser?.name || ''} size={32} src={currentUser?.avatar}
+          <Avatar name={currentUser?.name || ''} size={32} src={currentUser?.avatar} status={myPresence.state}
             style={{ cursor: 'pointer' }} onClick={() => navigate('/profile')} />
         </header>
 

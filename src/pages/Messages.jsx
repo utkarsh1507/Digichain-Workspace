@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { Avatar, IconBtn, Button, Empty, Modal, Input, fmtTime } from '../components/ui';
 import { messagesApi } from '../api/index.js';
 import { extractMeetLink, generateMeetLink, normalizeMeetLink, stripMeetLinkFromText } from '../utils/meet';
+import { getPresence, getStatusText, getUserSubtitle } from '../utils/presence';
 const URL_REGEX = /(https?:\/\/[^\s]+)/g;
 
 const EMOJIS = ['👍', '❤️', '🔥', '🚀', '✅', '😂', '😮', '👏'];
@@ -38,6 +39,9 @@ export default function Messages() {
   const active = channels.find(c => c.id === activeId);
   const activeMsgs = channelMessages[activeId] || [];
   const activeSeenBy = channelSeenBy[activeId] || {};
+  const now = Date.now();
+  const activeOtherUser = getDMOtherUser(active);
+  const activePresence = getPresence(activeOtherUser, now);
   const canDeleteActive = !!active && (
     active.type === 'dm'
       ? (active.memberIds || []).includes(currentUser?.id)
@@ -45,7 +49,6 @@ export default function Messages() {
   );
 
   // Compute typing names from SSE-driven state, only those updated within last 4s
-  const now = Date.now();
   const typing = Object.entries(typingByChannel?.[activeId] || {})
     .filter(([uid, data]) => uid !== currentUser?.id && (now - data.timestamp) < 4000)
     .map(([, data]) => data.name);
@@ -366,6 +369,7 @@ export default function Messages() {
             <ConvItem key={d.id} conv={d} active={d.id === activeId}
               name={getConvName(d)} last={getLastMsg(d.id)}
               avatar={getConvAvatar(d)}
+              user={getDMOtherUser(d)}
               unread={state.unreadCounts?.[d.id] || 0}
               onClick={() => handleSwitchChannel(d.id)} />
           ))}
@@ -379,9 +383,9 @@ export default function Messages() {
               style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 8, cursor: 'pointer' }}
               onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-3)'}
               onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              <Avatar name={u.name} size={24} src={u.avatar} status="online" />
+              <Avatar name={u.name} size={24} src={u.avatar} status={getPresence(u, now).state} />
               <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg-1)' }}>{u.name.split(' ')[0]}</span>
-              <span style={{ fontSize: 11, color: 'var(--fg-4)', marginLeft: 'auto' }}>{u.title?.split(' ')[0]}</span>
+              <span style={{ fontSize: 11, color: 'var(--fg-4)', marginLeft: 'auto' }}>{getUserSubtitle(u, now)}</span>
             </div>
           ))}
         </div>
@@ -396,7 +400,7 @@ export default function Messages() {
               justifyContent: 'space-between', flexShrink: 0, background: '#fff' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {active.type === 'dm'
-                  ? <Avatar name={getConvName(active)} size={32} src={getDMOtherUser(active)?.avatar} status="online" />
+                  ? <Avatar name={getConvName(active)} size={32} src={activeOtherUser?.avatar} status={activePresence.state} />
                   : <span style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--accent-tint)', display: 'inline-flex',
                       alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700 }}>
                       <Hash size={15} />
@@ -408,7 +412,11 @@ export default function Messages() {
                       {(active.memberIds || []).length} members{active.description ? ` · ${active.description}` : ''}
                     </div>
                   )}
-                  {active.type === 'dm' && <div style={{ fontSize: 11, color: '#16a371' }}>● Online</div>}
+                  {active.type === 'dm' && (
+                    <div style={{ fontSize: 11, color: activePresence.state === 'online' ? '#16a371' : activePresence.state === 'away' ? '#d97706' : 'var(--fg-3)' }}>
+                      {getStatusText(activeOtherUser)} · {activePresence.detail}
+                    </div>
+                  )}
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -462,7 +470,7 @@ export default function Messages() {
                         position: 'relative', width: '100%' }}>
                         {!isMe && (
                           <div style={{ width: 32, flexShrink: 0, display: 'flex', alignItems: 'flex-end' }}>
-                            {!grouped && <Avatar name={senderName} size={32} src={m.sender?.avatar} />}
+                            {!grouped && <Avatar name={senderName} size={32} src={m.sender?.avatar} status={getPresence(m.sender || users.find(u => u.id === senderId), now).state} />}
                           </div>
                         )}
                         <div style={{ maxWidth: '68%', display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start', gap: 2, position: 'relative' }}>
@@ -786,15 +794,16 @@ export default function Messages() {
   );
 }
 
-function ConvItem({ conv, active, name, last, unread, onClick, avatar }) {
+function ConvItem({ conv, active, name, last, unread, onClick, avatar, user }) {
   const [hover, setHover] = useState(false);
+  const presence = getPresence(user);
   return (
     <div onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
       style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 10,
         background: active ? '#fff' : hover ? 'var(--bg-3)' : 'transparent',
         boxShadow: active ? 'var(--shadow-xs)' : 'none', cursor: 'pointer', transition: 'background 120ms' }}>
       {conv.type === 'dm'
-        ? <Avatar name={name} size={30} src={avatar} status="online" />
+        ? <Avatar name={name} size={30} src={avatar} status={presence.state} />
         : <span style={{ width: 30, height: 30, borderRadius: 8, background: active ? 'var(--accent-tint)' : 'var(--bg-2)',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             color: active ? 'var(--accent)' : 'var(--fg-3)', fontWeight: 700, flexShrink: 0 }}>

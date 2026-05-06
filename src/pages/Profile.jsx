@@ -3,6 +3,7 @@ import { Camera, Edit3, Save, X, Mail, Phone, Briefcase, Building2, Calendar, Us
 import { useApp } from '../context/AppContext';
 import { Card, Button, Input, Textarea, Select, Pill, Eyebrow, Divider, Avatar, fmtDate } from '../components/ui';
 import { authApi } from '../api';
+import { STATUS_PRESETS, getPresence, getStatusText } from '../utils/presence';
 const DEPARTMENTS = ['Engineering', 'Operations', 'Marketing', 'Leadership', 'Design', 'Sales'];
 const LEAVE_TYPES = [
   { id: 'Casual', label: 'Casual Leave', total: 12 },
@@ -90,6 +91,7 @@ export default function Profile() {
   }
 
   const roleColors = { founder: 'accent', employee: 'info', intern: 'success' };
+  const myPresence = getPresence(currentUser);
 
   return (
     <div style={{ display: 'flex', gap: 28, maxWidth: 1100, margin: '0 auto' }} className="fade-in">
@@ -99,7 +101,7 @@ export default function Profile() {
         <Card style={{ padding: 24, textAlign: 'center' }}>
           {/* Avatar */}
           <div style={{ position: 'relative', width: 100, height: 100, margin: '0 auto 16px' }}>
-            <Avatar name={currentUser.name} size={100} src={currentUser.avatar} ring />
+            <Avatar name={currentUser.name} size={100} src={currentUser.avatar} status={myPresence.state} ring />
             <button onClick={() => photoRef.current?.click()}
               style={{ position: 'absolute', bottom: 2, right: 2, width: 30, height: 30, borderRadius: '50%',
                 background: 'var(--brand-gradient)', border: '2px solid #fff',
@@ -115,6 +117,9 @@ export default function Profile() {
             <Pill tone={roleColors[currentUser.role] || 'neutral'}>{currentUser.role}</Pill>
             <Pill tone="neutral">{currentUser.department}</Pill>
           </div>
+          <Pill tone={myPresence.state === 'online' ? 'success' : myPresence.state === 'away' ? 'warning' : 'neutral'} dot>
+            {getStatusText(currentUser)} · {myPresence.detail}
+          </Pill>
           <Divider />
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 14, fontSize: 13 }}>
             {[
@@ -198,6 +203,9 @@ export default function Profile() {
                 <Select label="Department" value={form.department || ''} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}
                   options={DEPARTMENTS.map(d => ({ value: d, label: d }))} />
                 <Input label="Join Date" value={form.joinDate || ''} onChange={e => setForm(f => ({ ...f, joinDate: e.target.value }))} type="date" icon={Calendar} />
+                <Select label="Workspace Status" value={form.statusPreset || 'working'} onChange={e => setForm(f => ({ ...f, statusPreset: e.target.value }))}
+                  options={STATUS_PRESETS.map(s => ({ value: s.value, label: s.label }))} />
+                <Input label="Custom Status Message" value={form.statusMessage || ''} onChange={e => setForm(f => ({ ...f, statusMessage: e.target.value }))} disabled={(form.statusPreset || 'working') !== 'custom'} />
               </div>
               <Textarea label="Bio" value={form.bio || ''} onChange={e => setForm(f => ({ ...f, bio: e.target.value }))} placeholder="Tell your team about yourself…" rows={3} />
             </div>

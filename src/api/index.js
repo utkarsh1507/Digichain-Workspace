@@ -51,6 +51,7 @@ export const usersApi = {
   create: (data) => req('POST', '/users', data),
   update: (id, data) => req('PATCH', `/users/${id}`, data),
   remove: (id) => req('DELETE', `/users/${id}`),
+  presence: () => req('POST', '/users/presence'),
   uploadAvatar: (id, file) => {
     const fd = new FormData();
     fd.append('avatar', file);
