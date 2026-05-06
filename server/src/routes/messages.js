@@ -13,8 +13,37 @@ const msgInclude = {
   sender: { select: { id: true, name: true, avatar: true } },
 };
 
+function parseMemberIds(memberIds) {
+  try {
+    return JSON.parse(memberIds || '[]');
+  } catch {
+    return [];
+  }
+}
+
 function parseChannel(c) {
-  return { ...c, memberIds: JSON.parse(c.memberIds || '[]') };
+  return { ...c, memberIds: parseMemberIds(c.memberIds) };
+}
+
+function isChannelMember(channel, userId) {
+  return parseMemberIds(channel.memberIds).includes(userId);
+}
+
+async function getChannel(channelId) {
+  return prisma.channel.findUnique({ where: { id: channelId } });
+}
+
+async function requireChannelAccess(channelId, userId, res) {
+  const channel = await getChannel(channelId);
+  if (!channel) {
+    res.status(404).json({ error: 'Channel not found' });
+    return null;
+  }
+  if (!isChannelMember(channel, userId)) {
+    res.status(403).json({ error: 'Forbidden' });
+    return null;
+  }
+  return channel;
 }
 
 // ── IMPORTANT: /channels/unread MUST be defined before /channels/:id ─────────
@@ -23,7 +52,7 @@ function parseChannel(c) {
 router.get('/channels/unread', auth, async (req, res) => {
   try {
     const all = await prisma.channel.findMany();
-    const mine = all.filter(c => JSON.parse(c.memberIds || '[]').includes(req.user.id));
+    const mine = all.filter(c => parseMemberIds(c.memberIds).includes(req.user.id));
 
     const readRecords = await prisma.channelRead.findMany({ where: { userId: req.user.id } });
     const readMap = {};
@@ -50,7 +79,7 @@ router.get('/channels/unread', auth, async (req, res) => {
 router.get('/channels', auth, async (req, res) => {
   try {
     const all = await prisma.channel.findMany({ orderBy: { createdAt: 'asc' } });
-    const mine = all.filter(c => JSON.parse(c.memberIds || '[]').includes(req.user.id));
+    const mine = all.filter(c => parseMemberIds(c.memberIds).includes(req.user.id));
     res.json(mine.map(parseChannel));
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -61,8 +90,15 @@ router.get('/channels', auth, async (req, res) => {
 router.post('/channels', auth, async (req, res) => {
   try {
     const { name, description, memberIds, type } = req.body;
+    const finalMemberIds = Array.from(new Set([...(memberIds || []), req.user.id]));
     const channel = await prisma.channel.create({
-      data: { name, description, memberIds: JSON.stringify(memberIds || [req.user.id]), type: type || 'channel' }
+      data: {
+        name,
+        description,
+        memberIds: JSON.stringify(finalMemberIds),
+        type: type || 'channel',
+        createdById: req.user.id,
+      }
     });
     const parsed = parseChannel(channel);
     broadcast('channel:new', parsed, parsed.memberIds);
@@ -72,24 +108,20 @@ router.post('/channels', auth, async (req, res) => {
   }
 });
 
-// Helper: get member IDs of a channel
-async function getChannelMembers(channelId) {
-  const ch = await prisma.channel.findUnique({ where: { id: channelId } });
-  if (!ch) return [];
-  return JSON.parse(ch.memberIds || '[]');
-}
-
 // GET /api/channels/:id/messages — returns { messages, seenBy }
 router.get('/channels/:id/messages', auth, async (req, res) => {
   try {
+    const channel = await requireChannelAccess(req.params.id, req.user.id, res);
+    if (!channel) return;
+
     const [messages, seenRecords] = await Promise.all([
       prisma.message.findMany({
-        where: { channelId: req.params.id },
+        where: { channelId: channel.id },
         include: msgInclude,
         orderBy: { timestamp: 'asc' },
         take: 100,
       }),
-      prisma.channelRead.findMany({ where: { channelId: req.params.id } }),
+      prisma.channelRead.findMany({ where: { channelId: channel.id } }),
     ]);
 
     const seenBy = {};
@@ -107,14 +139,16 @@ router.get('/channels/:id/messages', auth, async (req, res) => {
 // POST /api/channels/:id/messages — text message
 router.post('/channels/:id/messages', auth, async (req, res) => {
   try {
+    const channel = await requireChannelAccess(req.params.id, req.user.id, res);
+    if (!channel) return;
+
     const { text } = req.body;
     const msg = await prisma.message.create({
-      data: { channelId: req.params.id, senderId: req.user.id, text },
+      data: { channelId: channel.id, senderId: req.user.id, text },
       include: msgInclude,
     });
     const payload = { ...msg, reactions: [] };
-    const memberIds = await getChannelMembers(req.params.id);
-    broadcast('message:new', payload, memberIds);
+    broadcast('message:new', payload, parseMemberIds(channel.memberIds));
     res.json(payload);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -124,12 +158,15 @@ router.post('/channels/:id/messages', auth, async (req, res) => {
 // POST /api/channels/:id/upload — file/image attachment
 router.post('/channels/:id/upload', auth, uploadFile.single('file'), async (req, res) => {
   try {
+    const channel = await requireChannelAccess(req.params.id, req.user.id, res);
+    if (!channel) return;
+
     if (!req.file) return res.status(400).json({ error: 'No file' });
     const attachmentUrl = req.file.path; // Cloudinary permanent URL
     const isImage = req.file.mimetype.startsWith('image/');
     const msg = await prisma.message.create({
       data: {
-        channelId: req.params.id,
+        channelId: channel.id,
         senderId: req.user.id,
         text: req.body.text || null,
         attachmentUrl,
@@ -139,8 +176,7 @@ router.post('/channels/:id/upload', auth, uploadFile.single('file'), async (req,
       include: msgInclude,
     });
     const payload = { ...msg, reactions: [] };
-    const memberIds = await getChannelMembers(req.params.id);
-    broadcast('message:new', payload, memberIds);
+    broadcast('message:new', payload, parseMemberIds(channel.memberIds));
     res.json(payload);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -150,8 +186,11 @@ router.post('/channels/:id/upload', auth, uploadFile.single('file'), async (req,
 // POST /api/channels/:id/react
 router.post('/channels/:id/react', auth, async (req, res) => {
   try {
+    const channel = await requireChannelAccess(req.params.id, req.user.id, res);
+    if (!channel) return;
+
     const { messageId, emoji } = req.body;
-    const msg = await prisma.message.findUnique({ where: { id: messageId } });
+    const msg = await prisma.message.findFirst({ where: { id: messageId, channelId: channel.id } });
     if (!msg) return res.status(404).json({ error: 'Not found' });
 
     let reactions = JSON.parse(msg.reactions || '[]');
@@ -173,9 +212,62 @@ router.post('/channels/:id/react', auth, async (req, res) => {
       include: msgInclude,
     });
     const payload = { ...updated, reactions };
-    const memberIds = await getChannelMembers(req.params.id);
-    broadcast('message:update', payload, memberIds);
+    broadcast('message:update', payload, parseMemberIds(channel.memberIds));
     res.json(payload);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// DELETE /api/channels/:channelId/messages/:messageId
+router.delete('/channels/:channelId/messages/:messageId', auth, async (req, res) => {
+  try {
+    const channel = await requireChannelAccess(req.params.channelId, req.user.id, res);
+    if (!channel) return;
+
+    const msg = await prisma.message.findFirst({
+      where: { id: req.params.messageId, channelId: channel.id },
+    });
+    if (!msg) return res.status(404).json({ error: 'Message not found' });
+    if (msg.senderId !== req.user.id && req.user.role !== 'founder') {
+      return res.status(403).json({ error: 'You can only delete your own messages' });
+    }
+
+    await prisma.message.delete({ where: { id: msg.id } });
+    broadcast('message:delete', { channelId: channel.id, id: msg.id }, parseMemberIds(channel.memberIds));
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// DELETE /api/channels/:id
+router.delete('/channels/:id', auth, async (req, res) => {
+  try {
+    const channel = await requireChannelAccess(req.params.id, req.user.id, res);
+    if (!channel) return;
+
+    const memberIds = parseMemberIds(channel.memberIds);
+    const canDelete = channel.type === 'dm'
+      ? memberIds.includes(req.user.id)
+      : channel.createdById === req.user.id || req.user.role === 'founder';
+
+    if (!canDelete) {
+      return res.status(403).json({
+        error: channel.type === 'dm'
+          ? 'Forbidden'
+          : 'Only the channel creator can delete this channel',
+      });
+    }
+
+    await prisma.$transaction([
+      prisma.channelRead.deleteMany({ where: { channelId: channel.id } }),
+      prisma.channel.delete({ where: { id: channel.id } }),
+    ]);
+
+    delete typingStore[channel.id];
+    broadcast('channel:delete', { id: channel.id }, memberIds);
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -184,19 +276,21 @@ router.post('/channels/:id/react', auth, async (req, res) => {
 // POST /api/channels/:id/read — mark channel as fully read
 router.post('/channels/:id/read', auth, async (req, res) => {
   try {
+    const channel = await requireChannelAccess(req.params.id, req.user.id, res);
+    if (!channel) return;
+
     const now = new Date();
     await prisma.channelRead.upsert({
-      where: { channelId_userId: { channelId: req.params.id, userId: req.user.id } },
-      create: { channelId: req.params.id, userId: req.user.id, lastReadAt: now },
+      where: { channelId_userId: { channelId: channel.id, userId: req.user.id } },
+      create: { channelId: channel.id, userId: req.user.id, lastReadAt: now },
       update: { lastReadAt: now },
     });
     // Notify all channel members (including sender) so seen receipts update live
-    const memberIds = await getChannelMembers(req.params.id);
     broadcast('channel:read', {
-      channelId: req.params.id,
+      channelId: channel.id,
       userId: req.user.id,
       lastReadAt: now.toISOString(),
-    }, memberIds);
+    }, parseMemberIds(channel.memberIds));
     res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
@@ -205,6 +299,9 @@ router.post('/channels/:id/read', auth, async (req, res) => {
 
 // POST /api/channels/:id/typing — set user typing
 router.post('/channels/:id/typing', auth, async (req, res) => {
+  const channel = await requireChannelAccess(req.params.id, req.user.id, res);
+  if (!channel) return;
+
   const { id } = req.params;
   if (!typingStore[id]) typingStore[id] = {};
   typingStore[id][req.user.id] = {
@@ -212,7 +309,7 @@ router.post('/channels/:id/typing', auth, async (req, res) => {
     timestamp: Date.now(),
   };
   // Push typing state via SSE so other users get it instantly
-  const memberIds = await getChannelMembers(id);
+  const memberIds = parseMemberIds(channel.memberIds);
   broadcast('channel:typing', {
     channelId: id,
     userId: req.user.id,
@@ -224,6 +321,9 @@ router.post('/channels/:id/typing', auth, async (req, res) => {
 
 // GET /api/channels/:id/typing — get who is currently typing
 router.get('/channels/:id/typing', auth, async (req, res) => {
+  const channel = await requireChannelAccess(req.params.id, req.user.id, res);
+  if (!channel) return;
+
   const { id } = req.params;
   const store = typingStore[id] || {};
   const now = Date.now();
@@ -244,7 +344,7 @@ router.post('/dm/ensure', auth, async (req, res) => {
     let created = false;
     if (!channel) {
       channel = await prisma.channel.create({
-        data: { name: dmName, type: 'dm', memberIds: JSON.stringify(ids) }
+        data: { name: dmName, type: 'dm', memberIds: JSON.stringify(ids), createdById: req.user.id }
       });
       created = true;
     }

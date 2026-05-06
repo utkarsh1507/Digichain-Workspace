@@ -1,13 +1,7 @@
 import { useState } from 'react';
-import { Mail, Lock, Eye, EyeOff, Zap } from 'lucide-react';
+import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Button, Input } from '../components/ui';
-
-const QUICK_LOGINS = [
-  { label: 'Founder',  color: 'var(--brand-gradient)', email: 'utkarsh@digichainpi.com', name: 'Utkarsh' },
-  { label: 'Employee', color: 'var(--accent)',          email: 'karan@digichainpi.com',   name: 'Karan'   },
-  { label: 'Intern',   color: '#16a371',                email: 'anaya@digichainpi.com',   name: 'Anaya'   },
-];
 
 export default function Login() {
   const { state, login } = useApp();
@@ -20,12 +14,6 @@ export default function Login() {
     e.preventDefault();
     setSubmitting(true);
     await login(email, password);
-    setSubmitting(false);
-  }
-
-  async function quickLogin(ql) {
-    setSubmitting(true);
-    await login(ql.email, '1234');
     setSubmitting(false);
   }
 
@@ -73,33 +61,6 @@ export default function Login() {
             </Button>
           </form>
 
-          {/* Divider */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '28px 0' }}>
-            <div style={{ flex: 1, height: 1, background: 'var(--border-1)' }} />
-            <span style={{ fontSize: 12, color: 'var(--fg-3)', fontWeight: 500 }}>Quick access demo</span>
-            <div style={{ flex: 1, height: 1, background: 'var(--border-1)' }} />
-          </div>
-
-          {/* Quick login */}
-          <div style={{ display: 'flex', gap: 10 }}>
-            {QUICK_LOGINS.map(r => (
-              <button key={r.label} onClick={() => quickLogin(r)} disabled={busy}
-                style={{ flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--border-1)',
-                  background: '#fff', cursor: busy ? 'not-allowed' : 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600,
-                  color: 'var(--fg-1)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4,
-                  opacity: busy ? 0.6 : 1, transition: 'all 180ms var(--ease-out)' }}
-                onMouseEnter={e => { if (!busy) { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.boxShadow = 'var(--shadow-sm)'; } }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border-1)'; e.currentTarget.style.boxShadow = 'none'; }}>
-                <span style={{ width: 28, height: 28, borderRadius: '50%', background: r.color,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Zap size={13} color="#fff" />
-                </span>
-                {r.label}
-                <span style={{ fontSize: 10, color: 'var(--fg-3)', fontWeight: 400 }}>{r.name}</span>
-              </button>
-            ))}
-          </div>
-          <p style={{ fontSize: 11, color: 'var(--fg-4)', textAlign: 'center', marginTop: 16 }}>Demo password: <code style={{ fontFamily: 'var(--font-mono)', background: 'var(--bg-2)', padding: '1px 5px', borderRadius: 4 }}>1234</code></p>
         </div>
       </div>
 

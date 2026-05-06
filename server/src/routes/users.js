@@ -5,6 +5,21 @@ const auth = require('../middleware/auth');
 const { uploadAvatar } = require('../lib/cloudinary');
 const { broadcast } = require('../lib/events');
 const prisma = new PrismaClient();
+const PASSWORD_MIN_LENGTH = 10;
+
+function normalizeEmail(email) {
+  return typeof email === 'string' ? email.trim().toLowerCase() : '';
+}
+
+function validatePassword(password) {
+  if (typeof password !== 'string' || password.length < PASSWORD_MIN_LENGTH) {
+    return `Password must be at least ${PASSWORD_MIN_LENGTH} characters long`;
+  }
+  if (!/[a-z]/.test(password)) return 'Password must include a lowercase letter';
+  if (!/[A-Z]/.test(password)) return 'Password must include an uppercase letter';
+  if (!/[0-9]/.test(password)) return 'Password must include a number';
+  return null;
+}
 
 // GET /api/users — all users (auth required)
 router.get('/', auth, async (req, res) => {
@@ -33,9 +48,21 @@ router.post('/', auth, async (req, res) => {
   try {
     if (req.user.role !== 'founder') return res.status(403).json({ error: 'Forbidden' });
     const { name, email, role, title, department, phone, joinDate, password: pw } = req.body;
-    const hashed = await bcrypt.hash(pw || '1234', 10);
+    const passwordError = validatePassword(pw);
+    if (passwordError) return res.status(400).json({ error: passwordError });
+
+    const hashed = await bcrypt.hash(pw, 10);
     const user = await prisma.user.create({
-      data: { name, email, password: hashed, role: role || 'employee', title, department, phone, joinDate },
+      data: {
+        name: name?.trim(),
+        email: normalizeEmail(email),
+        password: hashed,
+        role: role || 'employee',
+        title: title?.trim(),
+        department,
+        phone: phone?.trim() || null,
+        joinDate,
+      },
     });
     const { password, ...safeUser } = user;
     broadcast('user:new', safeUser);
@@ -54,8 +81,14 @@ router.patch('/:id', auth, async (req, res) => {
     }
     const { password, ...data } = req.body;
     if (password) {
+      const passwordError = validatePassword(password);
+      if (passwordError) return res.status(400).json({ error: passwordError });
       data.password = await bcrypt.hash(password, 10);
     }
+    if (data.email !== undefined) data.email = normalizeEmail(data.email);
+    if (data.name !== undefined) data.name = data.name?.trim();
+    if (data.title !== undefined) data.title = data.title?.trim();
+    if (data.phone !== undefined) data.phone = data.phone?.trim() || null;
     const user = await prisma.user.update({ where: { id: req.params.id }, data });
     const { password: _, ...safeUser } = user;
     broadcast('user:update', safeUser);

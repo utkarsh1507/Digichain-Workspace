@@ -121,6 +121,11 @@ function upsertAttendanceRecord(records, record) {
   return next;
 }
 
+function omitKey(obj, keyToRemove) {
+  const { [keyToRemove]: _removed, ...rest } = obj;
+  return rest;
+}
+
 function reducer(state, action) {
   switch (action.type) {
 
@@ -261,6 +266,25 @@ function reducer(state, action) {
         : [...prev, action.message];
       return { ...state, channelMessages: { ...state.channelMessages, [action.channelId]: msgs } };
     }
+    case 'REMOVE_MESSAGE': {
+      const prev = state.channelMessages[action.channelId] || [];
+      return {
+        ...state,
+        channelMessages: {
+          ...state.channelMessages,
+          [action.channelId]: prev.filter((message) => message.id !== action.id),
+        },
+      };
+    }
+    case 'REMOVE_CHANNEL':
+      return {
+        ...state,
+        channels: state.channels.filter((channel) => channel.id !== action.id),
+        channelMessages: omitKey(state.channelMessages, action.id),
+        channelSeenBy: omitKey(state.channelSeenBy, action.id),
+        unreadCounts: omitKey(state.unreadCounts, action.id),
+        typingByChannel: omitKey(state.typingByChannel, action.id),
+      };
 
     case 'ADD_ANNOUNCEMENT':    return { ...state, announcements: upsertById(state.announcements, action.ann) };
     case 'UPDATE_ANNOUNCEMENT': return { ...state, announcements: upsertById(state.announcements, action.ann) };
@@ -420,10 +444,24 @@ export function AppProvider({ children }) {
         } catch {}
       });
 
+      es.addEventListener('message:delete', (e) => {
+        try {
+          const { channelId, id } = JSON.parse(e.data);
+          dispatch({ type: 'REMOVE_MESSAGE', channelId, id });
+        } catch {}
+      });
+
       es.addEventListener('channel:new', (e) => {
         try {
           const ch = JSON.parse(e.data);
           dispatch({ type: 'ADD_CHANNEL', channel: ch });
+        } catch {}
+      });
+
+      es.addEventListener('channel:delete', (e) => {
+        try {
+          const { id } = JSON.parse(e.data);
+          dispatch({ type: 'REMOVE_CHANNEL', id });
         } catch {}
       });
 
@@ -725,6 +763,10 @@ export function AppProvider({ children }) {
     dispatch({ type: 'UPDATE_MESSAGE', channelId, message });
     return message;
   }
+  async function deleteMessage(channelId, messageId) {
+    await messagesApi.deleteMessage(channelId, messageId);
+    dispatch({ type: 'REMOVE_MESSAGE', channelId, id: messageId });
+  }
   async function ensureDm(otherUserId) {
     const channel = await messagesApi.ensureDm(otherUserId);
     dispatch({ type: 'ADD_CHANNEL', channel });
@@ -734,6 +776,10 @@ export function AppProvider({ children }) {
     const channel = await messagesApi.createChannel(data);
     dispatch({ type: 'ADD_CHANNEL', channel });
     return channel;
+  }
+  async function deleteChannel(channelId) {
+    await messagesApi.deleteChannel(channelId);
+    dispatch({ type: 'REMOVE_CHANNEL', id: channelId });
   }
   async function markChannelRead(channelId) {
     try {
@@ -828,7 +874,7 @@ export function AppProvider({ children }) {
     signIn, signOut,
     applyLeave, updateLeaveStatus, deleteLeave,
     createTask, updateTask, deleteTask, addTaskComment,
-    loadMessages, sendMessage, sendFile, reactToMessage, ensureDm, createChannel, markChannelRead,
+    loadMessages, sendMessage, sendFile, reactToMessage, deleteMessage, ensureDm, createChannel, deleteChannel, markChannelRead,
     createAnnouncement, updateAnnouncement, deleteAnnouncement, reactToAnnouncement,
     uploadDocument, deleteDocument,
     createMeeting, updateMeeting, deleteMeeting,

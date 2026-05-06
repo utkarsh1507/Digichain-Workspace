@@ -87,9 +87,11 @@ export const tasksApi = {
 export const messagesApi = {
   listChannels: () => req('GET', '/channels'),
   createChannel: (data) => req('POST', '/channels', data),
+  deleteChannel: (channelId) => req('DELETE', `/channels/${channelId}`),
   // Returns { messages, seenBy }
   getMessages: (channelId) => req('GET', `/channels/${channelId}/messages`),
   sendMessage: (channelId, text) => req('POST', `/channels/${channelId}/messages`, { text }),
+  deleteMessage: (channelId, messageId) => req('DELETE', `/channels/${channelId}/messages/${messageId}`),
   uploadFile: (channelId, file, text) => {
     const fd = new FormData();
     fd.append('file', file);

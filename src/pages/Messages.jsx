@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Hash, Plus, Send, Paperclip, Video, Search, MoreHorizontal, Users, X, File, Image, CheckCheck, ExternalLink, Smile } from 'lucide-react';
+import { Hash, Plus, Send, Paperclip, Video, Search, Users, X, File, Image, CheckCheck, ExternalLink, Smile, Trash2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar, IconBtn, Button, Empty, Modal, Input, fmtTime } from '../components/ui';
 import { messagesApi } from '../api/index.js';
@@ -9,7 +9,10 @@ const URL_REGEX = /(https?:\/\/[^\s]+)/g;
 const EMOJIS = ['👍', '❤️', '🔥', '🚀', '✅', '😂', '😮', '👏'];
 
 export default function Messages() {
-  const { state, loadMessages, sendMessage, sendFile, reactToMessage, ensureDm, createChannel, markChannelRead, addToast, setActiveChannel } = useApp();
+  const {
+    state, loadMessages, sendMessage, sendFile, reactToMessage, deleteMessage,
+    ensureDm, createChannel, deleteChannel, markChannelRead, addToast, setActiveChannel,
+  } = useApp();
   const { currentUser, channels, channelMessages, channelSeenBy, users, typingByChannel } = state;
 
   const [activeId, setActiveId] = useState(null);
@@ -20,6 +23,8 @@ export default function Messages() {
   const [attachedFile, setAttachedFile] = useState(null);
   const [startingMeet, setStartingMeet] = useState(false);
   const [pickerForMsgId, setPickerForMsgId] = useState(null);
+  const [deletingChannel, setDeletingChannel] = useState(false);
+  const [deletingMessageId, setDeletingMessageId] = useState(null);
   const [, forceTick] = useState(0);                  // refresh typing labels every 1s
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -28,10 +33,16 @@ export default function Messages() {
   // Separate channels and DMs
   const myChannels = channels.filter(c => c.type === 'channel');
   const myDMs = channels.filter(c => c.type === 'dm');
+  const conversations = [...myChannels, ...myDMs];
 
   const active = channels.find(c => c.id === activeId);
   const activeMsgs = channelMessages[activeId] || [];
   const activeSeenBy = channelSeenBy[activeId] || {};
+  const canDeleteActive = !!active && (
+    active.type === 'dm'
+      ? (active.memberIds || []).includes(currentUser?.id)
+      : active.createdById === currentUser?.id || currentUser?.role === 'founder'
+  );
 
   // Compute typing names from SSE-driven state, only those updated within last 4s
   const now = Date.now();
@@ -39,12 +50,16 @@ export default function Messages() {
     .filter(([uid, data]) => uid !== currentUser?.id && (now - data.timestamp) < 4000)
     .map(([, data]) => data.name);
 
-  // Set first channel as default
+  // Keep the active conversation valid as the list changes
   useEffect(() => {
-    if (!activeId && myChannels.length > 0) {
-      setActiveId(myChannels[0].id);
+    if (!conversations.length) {
+      if (activeId) setActiveId(null);
+      return;
     }
-  }, [myChannels.length]); // eslint-disable-line
+    if (!activeId || !conversations.some((conv) => conv.id === activeId)) {
+      setActiveId(conversations[0].id);
+    }
+  }, [conversations, activeId]);
 
   // Tell AppContext which channel is currently open (so it can suppress
   // toast/sound for messages we're already looking at) + clean up on unmount
@@ -179,6 +194,33 @@ export default function Messages() {
 
   async function handleReact(msgId, emoji) {
     try { await reactToMessage(activeId, msgId, emoji); } catch {}
+  }
+
+  async function handleDeleteMessage(messageId) {
+    if (!window.confirm('Delete this message for everyone?')) return;
+    setDeletingMessageId(messageId);
+    try {
+      await deleteMessage(activeId, messageId);
+      setPickerForMsgId((prev) => (prev === messageId ? null : prev));
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setDeletingMessageId(null);
+    }
+  }
+
+  async function handleDeleteChannel() {
+    if (!active) return;
+    const label = active.type === 'dm' ? 'this chat' : `channel ${getConvName(active)}`;
+    if (!window.confirm(`Delete ${label}? This will remove it for all members.`)) return;
+    setDeletingChannel(true);
+    try {
+      await deleteChannel(active.id);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setDeletingChannel(false);
+    }
   }
 
   async function handleStartInstantMeet() {
@@ -381,7 +423,16 @@ export default function Messages() {
                   </Button>
                 )}
                 {active.type === 'channel' && <IconBtn icon={Users} title="Members" />}
-                <IconBtn icon={MoreHorizontal} />
+                {canDeleteActive && (
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    icon={Trash2}
+                    onClick={handleDeleteChannel}
+                    disabled={deletingChannel}>
+                    {deletingChannel ? 'Deleting...' : active.type === 'dm' ? 'Delete Chat' : 'Delete Channel'}
+                  </Button>
+                )}
               </div>
             </div>
 
@@ -401,6 +452,8 @@ export default function Messages() {
                   const inviteText = meetLink ? stripMeetLinkFromText(m.text || '') : m.text;
 
                   const pickerOpen = pickerForMsgId === m.id;
+                  const canDeleteMessage = senderId === currentUser?.id || currentUser?.role === 'founder';
+                  const isDeletingMessage = deletingMessageId === m.id;
 
                   return (
                     <div key={m.id} style={{ display: 'flex', flexDirection: 'column',
@@ -502,6 +555,30 @@ export default function Messages() {
                               title="Add reaction">
                               <Smile size={14} />
                             </button>
+                            {canDeleteMessage && (
+                              <button
+                                onClick={() => handleDeleteMessage(m.id)}
+                                disabled={isDeletingMessage}
+                                style={{
+                                  height: 28,
+                                  padding: '0 10px',
+                                  borderRadius: 999,
+                                  background: '#fff',
+                                  border: '1px solid var(--border-1)',
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  cursor: isDeletingMessage ? 'not-allowed' : 'pointer',
+                                  color: '#ad2236',
+                                  opacity: isDeletingMessage ? 0.6 : 1,
+                                  fontSize: 11,
+                                  fontWeight: 700,
+                                  fontFamily: 'inherit',
+                                }}
+                                title="Delete message">
+                                {isDeletingMessage ? 'Deleting...' : 'Delete'}
+                              </button>
+                            )}
                           </div>
 
                           {/* Reaction picker popover — positioned BELOW the bubble */}

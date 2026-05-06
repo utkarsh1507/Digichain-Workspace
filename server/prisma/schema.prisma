@@ -28,6 +28,7 @@ model User {
   tasksReported Task[]         @relation("ReportedTasks")
   comments      TaskComment[]
   messages      Message[]
+  createdChannels Channel[]    @relation("ChannelCreator")
   announcements  Announcement[]
   documents      Document[]
   meetingsHosted Meeting[]
@@ -95,6 +96,8 @@ model Channel {
   type        String    @default("channel")
   description String?
   memberIds   String
+  createdById String?
+  createdBy   User?     @relation("ChannelCreator", fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime  @default(now())
   messages    Message[]
 }
