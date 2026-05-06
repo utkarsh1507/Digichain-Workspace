@@ -21,12 +21,40 @@ function parseAllowedOrigins() {
   ]));
 }
 
+function parseAllowedOriginRegexes() {
+  return (process.env.CLIENT_URL_REGEX || '')
+    .split(',')
+    .map((pattern) => pattern.trim())
+    .filter(Boolean)
+    .map((pattern) => {
+      try {
+        return new RegExp(pattern);
+      } catch (err) {
+        console.warn(`Ignoring invalid CLIENT_URL_REGEX pattern "${pattern}"`);
+        return null;
+      }
+    })
+    .filter(Boolean);
+}
+
 const allowedOrigins = parseAllowedOrigins();
+const allowedOriginRegexes = parseAllowedOriginRegexes();
 const uploadsDir = path.join(__dirname, '../uploads');
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true;
+  if (allowedOrigins.includes(origin)) return true;
+  return allowedOriginRegexes.some((pattern) => pattern.test(origin));
+}
 
 // Middleware
 app.use(cors({
-  origin: allowedOrigins,
+  origin(origin, callback) {
+    if (isAllowedOrigin(origin)) {
+      return callback(null, true);
+    }
+    return callback(new Error(`Origin ${origin} not allowed by CORS`));
+  },
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
@@ -63,4 +91,7 @@ app.listen(PORT, () => {
     console.log('   Serving legacy local uploads from /uploads');
   }
   console.log(`   CORS enabled for: ${allowedOrigins.join(', ')}\n`);
+  if (allowedOriginRegexes.length > 0) {
+    console.log(`   CORS regex patterns: ${allowedOriginRegexes.map((pattern) => pattern.toString()).join(', ')}\n`);
+  }
 });
