@@ -23,7 +23,7 @@ function MobileBlock() {
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      background: '#0e0e14',
+      background: '#fafafb',
       padding: '32px 24px',
       textAlign: 'center',
       fontFamily: "'Manrope', sans-serif",
@@ -31,34 +31,37 @@ function MobileBlock() {
       <img
         src="/digichain-logo.png"
         alt="DigiChain"
-        style={{ width: 72, height: 72, objectFit: 'contain', marginBottom: 32, opacity: 0.95 }}
+        style={{ width: 72, height: 72, objectFit: 'contain', marginBottom: 32 }}
       />
       <div style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 6,
+        background: '#fde7eb',
+        color: '#e0364c',
         fontSize: 11,
         fontWeight: 700,
-        letterSpacing: '0.18em',
+        letterSpacing: '0.16em',
         textTransform: 'uppercase',
-        color: '#7B61FF',
-        marginBottom: 20,
+        padding: '5px 14px',
+        borderRadius: 9999,
+        marginBottom: 24,
       }}>
-        Access Denied
+        <span style={{ fontSize: 13 }}>⊘</span> Access Denied
       </div>
       <h1 style={{
         fontSize: 28,
         fontWeight: 800,
-        color: '#ffffff',
-        margin: '0 0 16px',
+        color: '#0e0e14',
+        margin: '0 0 12px',
         lineHeight: 1.2,
-        background: 'linear-gradient(135deg, #5cc9f5 0%, #8090fd 50%, #d345fd 100%)',
-        WebkitBackgroundClip: 'text',
-        WebkitTextFillColor: 'transparent',
       }}>
         Wrong Device.
       </h1>
       <p style={{
         fontSize: 16,
-        fontWeight: 600,
-        color: '#9a9aa8',
+        fontWeight: 500,
+        color: '#41414d',
         margin: '0 0 48px',
         maxWidth: 280,
         lineHeight: 1.6,
@@ -67,10 +70,10 @@ function MobileBlock() {
       </p>
       <p style={{
         fontSize: 12,
-        color: '#41414d',
+        color: '#9a9aa8',
         maxWidth: 300,
-        lineHeight: 1.7,
-        borderTop: '1px solid #1e1e2a',
+        lineHeight: 1.8,
+        borderTop: '1px solid #e8e8ee',
         paddingTop: 24,
       }}>
         This application is designed exclusively for desktop use. Please switch to a desktop or laptop to continue.
