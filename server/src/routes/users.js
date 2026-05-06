@@ -1,0 +1,133 @@
+const router = require('express').Router();
+const bcrypt = require('bcryptjs');
+const { PrismaClient } = require('@prisma/client');
+const auth = require('../middleware/auth');
+const { uploadAvatar } = require('../lib/cloudinary');
+const prisma = new PrismaClient();
+
+// GET /api/users — all users (auth required)
+router.get('/', auth, async (req, res) => {
+  try {
+    const users = await prisma.user.findMany({ orderBy: { createdAt: 'asc' } });
+    res.json(users.map(({ password, ...u }) => u));
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/users/:id
+router.get('/:id', auth, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!user) return res.status(404).json({ error: 'Not found' });
+    const { password, ...safeUser } = user;
+    res.json(safeUser);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/users — create (founder only)
+router.post('/', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'founder') return res.status(403).json({ error: 'Forbidden' });
+    const { name, email, role, title, department, phone, joinDate, password: pw } = req.body;
+    const hashed = await bcrypt.hash(pw || '1234', 10);
+    const user = await prisma.user.create({
+      data: { name, email, password: hashed, role: role || 'employee', title, department, phone, joinDate },
+    });
+    const { password, ...safeUser } = user;
+    res.json(safeUser);
+  } catch (err) {
+    if (err.code === 'P2002') return res.status(409).json({ error: 'Email already exists' });
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// PATCH /api/users/:id — update own profile or founder updates anyone
+router.patch('/:id', auth, async (req, res) => {
+  try {
+    if (req.user.id !== req.params.id && req.user.role !== 'founder') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    const { password, ...data } = req.body;
+    if (password) {
+      data.password = await bcrypt.hash(password, 10);
+    }
+    const user = await prisma.user.update({ where: { id: req.params.id }, data });
+    const { password: _, ...safeUser } = user;
+    res.json(safeUser);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// DELETE /api/users/:id — founder only
+router.delete('/:id', auth, async (req, res) => {
+  try {
+    if (req.user.role !== 'founder') return res.status(403).json({ error: 'Forbidden' });
+    if (req.user.id === req.params.id) return res.status(400).json({ error: 'Cannot delete yourself' });
+    const userId = req.params.id;
+    const [channels, meetings] = await Promise.all([
+      prisma.channel.findMany(),
+      prisma.meeting.findMany(),
+    ]);
+
+    const channelUpdates = channels
+      .map((channel) => {
+        const memberIds = JSON.parse(channel.memberIds || '[]');
+        if (!memberIds.includes(userId)) return null;
+
+        const nextMemberIds = memberIds.filter((id) => id !== userId);
+        return nextMemberIds.length === 0
+          ? prisma.channel.delete({ where: { id: channel.id } })
+          : prisma.channel.update({
+              where: { id: channel.id },
+              data: { memberIds: JSON.stringify(nextMemberIds) },
+            });
+      })
+      .filter(Boolean);
+
+    const meetingUpdates = meetings
+      .filter((meeting) => meeting.organizerId !== userId)
+      .map((meeting) => {
+        const attendeeIds = JSON.parse(meeting.attendeeIds || '[]');
+        if (!attendeeIds.includes(userId)) return null;
+
+        return prisma.meeting.update({
+          where: { id: meeting.id },
+          data: { attendeeIds: JSON.stringify(attendeeIds.filter((id) => id !== userId)) },
+        });
+      })
+      .filter(Boolean);
+
+    await prisma.$transaction([
+      ...channelUpdates,
+      ...meetingUpdates,
+      prisma.channelRead.deleteMany({ where: { userId } }),
+      prisma.user.delete({ where: { id: userId } }),
+    ]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Delete user failed:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/users/:id/avatar — upload profile photo
+router.post('/:id/avatar', auth, uploadAvatar.single('avatar'), async (req, res) => {
+  try {
+    if (req.user.id !== req.params.id && req.user.role !== 'founder') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
+    if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+    const avatarUrl = req.file.path; // Cloudinary permanent URL
+    const user = await prisma.user.update({ where: { id: req.params.id }, data: { avatar: avatarUrl } });
+    const { password, ...safeUser } = user;
+    res.json(safeUser);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+module.exports = router;

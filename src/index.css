@@ -1,0 +1,128 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --brand-cyan:    #5cc9f5;
+  --brand-blue:    #6aa8fb;
+  --brand-indigo:  #8090fd;
+  --brand-violet:  #a56ffd;
+  --brand-magenta: #d345fd;
+  --brand-pink:    #df38ff;
+
+  --brand-gradient: linear-gradient(135deg,
+    var(--brand-cyan)    0%,
+    var(--brand-indigo) 32%,
+    var(--brand-violet) 58%,
+    var(--brand-magenta) 84%,
+    var(--brand-pink)  100%);
+
+  --accent:        #7B61FF;
+  --accent-hover:  #6a4ff0;
+  --accent-press:  #5a40d9;
+  --accent-tint:   #ede9ff;
+  --accent-soft:   #f6f4ff;
+
+  --bg-0:    #ffffff;
+  --bg-1:    #fafafb;
+  --bg-2:    #f4f4f7;
+  --bg-3:    #ebebf0;
+  --bg-inverse: #0e0e14;
+
+  --fg-1:    #0e0e14;
+  --fg-2:    #41414d;
+  --fg-3:    #6c6c7a;
+  --fg-4:    #9a9aa8;
+  --fg-on-brand: #ffffff;
+
+  --border-1: #e8e8ee;
+  --border-2: #dcdce4;
+  --border-3: #c8c8d2;
+
+  --success:      #16a371;
+  --success-tint: #e6f6ef;
+  --warning:      #d97706;
+  --warning-tint: #fdf3e6;
+  --danger:       #e0364c;
+  --danger-tint:  #fde7eb;
+  --info:         #2563eb;
+  --info-tint:    #e6effd;
+
+  --status-present-bg: #e6f6ef;  --status-present-fg: #0e7a52;
+  --status-leave-bg:   #fdf3e6;  --status-leave-fg:   #a85a00;
+  --status-absent-bg:  #fde7eb;  --status-absent-fg:  #ad2236;
+  --status-remote-bg:  #ede9ff;  --status-remote-fg:  #5a40d9;
+
+  --space-1: 4px;  --space-2: 8px;   --space-3: 12px;  --space-4: 16px;
+  --space-5: 20px; --space-6: 24px;  --space-8: 32px;  --space-10: 40px;
+  --space-12: 48px; --space-16: 64px;
+
+  --radius-xs: 4px;  --radius-sm: 6px;   --radius-md: 10px;
+  --radius-lg: 14px; --radius-xl: 20px;  --radius-2xl: 28px; --radius-full: 9999px;
+
+  --shadow-xs: 0 1px 2px rgba(14,14,20,0.04);
+  --shadow-sm: 0 1px 2px rgba(14,14,20,0.04), 0 2px 6px rgba(14,14,20,0.04);
+  --shadow-md: 0 2px 4px rgba(14,14,20,0.04), 0 8px 24px rgba(14,14,20,0.06);
+  --shadow-lg: 0 4px 8px rgba(14,14,20,0.04), 0 16px 40px rgba(14,14,20,0.08);
+  --shadow-brand: 0 8px 24px rgba(123,97,255,0.20);
+  --ring-focus: 0 0 0 3px rgba(123,97,255,0.25);
+
+  --font-sans: 'Manrope', ui-sans-serif, -apple-system, system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --duration-fast: 120ms;
+  --duration-base: 180ms;
+  --duration-slow: 280ms;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body {
+  margin: 0; padding: 0;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 20px;
+  color: var(--fg-1);
+  background: var(--bg-0);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1,h2,h3,h4,h5,h6 { margin: 0; }
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+button { font-family: var(--font-sans); }
+
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 999px; }
+::-webkit-scrollbar-thumb:hover { background: var(--border-3); }
+
+.text-gradient {
+  background: var(--brand-gradient);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.mono { font-family: var(--font-mono); }
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(22,163,113,0.4); }
+  50%       { box-shadow: 0 0 0 6px rgba(22,163,113,0); }
+}
+
+.fade-in  { animation: fadeIn  var(--duration-slow) var(--ease-out) both; }
+.slide-in { animation: slideIn var(--duration-slow) var(--ease-out) both; }
+.pulse-dot { animation: pulse-dot 2s infinite; }

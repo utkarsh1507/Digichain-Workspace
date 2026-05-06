@@ -1,0 +1,38 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(unzip -l \"Digichain Pioneers Design System.zip\")",
+      "Bash(unzip -o \"Digichain Pioneers Design System.zip\" -d /tmp/design-system/)",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(curl -s http://localhost:5174)",
+      "mcp__Claude_in_Chrome__tabs_context_mcp",
+      "Bash(npx vite *)",
+      "Read(//tmp/design-system/**)",
+      "Bash(cp /tmp/design-system/uploads/Diginchain-final-logo-2-Photoroom.png /c/Users/UTKARSH/Downloads/digichain-employee/public/logo.png)",
+      "Bash(cp /tmp/design-system/assets/logo-mark.png /c/Users/UTKARSH/Downloads/digichain-employee/public/logo-mark.png)",
+      "Bash(cp /tmp/design-system/assets/logo-full.png /c/Users/UTKARSH/Downloads/digichain-employee/public/logo-full.png)",
+      "Bash(npx prisma *)",
+      "Bash(node src/seed.js)",
+      "Bash(timeout 5 node src/index.js)",
+      "Bash(node -e ' *)",
+      "Bash(curl -s http://localhost:3001/api/health)",
+      "Bash(kill %1)",
+      "Bash(curl -s -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"utkarsh@digichainpi.com\",\"password\":\"1234\"}')",
+      "Bash(python3 -c \"import sys,json; data=json.load\\(sys.stdin\\); print\\(f'Channels: {len\\(data\\)} total'\\); [print\\(f'  - {c[\\\\\"name\\\\\"]} \\({c[\\\\\"type\\\\\"]}\\)'\\) for c in data[:6]]\")",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const r=JSON.parse\\(d\\);console.log\\('Channels:',r.length\\);r.forEach\\(c=>console.log\\(' -',c.name,'\\(',c.type,'\\)'\\)\\);}\\)\")",
+      "Bash(curl -s http://localhost:3001/api/channels -H \"Authorization: Bearer test\")",
+      "Bash(netstat -ano)",
+      "PowerShell(Stop-Process -Id 19516 -Force)",
+      "Bash(taskkill /f /im node.exe)",
+      "Bash(start /b node src/index.js)",
+      "Bash(curl -s -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d \"{\\\\\"email\\\\\":\\\\\"varun@digichain.io\\\\\",\\\\\"password\\\\\":\\\\\"1234\\\\\"}\")",
+      "Bash(python3 -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'Unread counts: {d}'\\)\")",
+      "Bash(curl -s -X POST http://localhost:3001/api/auth/login -H \"Content-Type: application/json\" -d '{\"email\":\"varun@digichain.io\",\"password\":\"1234\"}')",
+      "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const ch=JSON.parse\\(d\\);console.log\\('Channels:',ch.length,'memberIds type:',typeof ch[0]?.memberIds\\)}\\)\")",
+      "Bash(del \"C:\\\\Users\\\\UTKARSH\\\\Downloads\\\\digichain-employee\\\\server\\\\prisma\\\\dev.db\")",
+      "PowerShell(Set-Location \"C:\\\\Users\\\\UTKARSH\\\\Downloads\\\\digichain-employee\\\\server\"; Start-Process -NoNewWindow -FilePath \"node\" -ArgumentList \"src/index.js\" -RedirectStandardOutput \"server.log\" -RedirectStandardError \"server-err.log\"; Start-Sleep -Seconds 3; $h = Invoke-WebRequest -Uri \"http://localhost:3001/api/health\" -UseBasicParsing; Write-Host \"Health:\" $h.Content)",
+      "PowerShell($login = Invoke-WebRequest -Uri \"http://localhost:3001/api/auth/login\" -Method POST -ContentType \"application/json\" -Body '{\"email\":\"utkarsh@digichainpi.com\",\"password\":\"1234\"}' -UseBasicParsing | ConvertFrom-Json; $token = $login.token; Write-Host \"Login OK, user:\" $login.user.name; $channels = Invoke-WebRequest -Uri \"http://localhost:3001/api/channels\" -Headers @{Authorization=\"Bearer $token\"} -UseBasicParsing | ConvertFrom-Json; Write-Host \"Channels:\" $channels.Count \"| First memberIds type:\" \\($channels[0].memberIds.GetType\\(\\).Name\\); $unread = Invoke-WebRequest -Uri \"http://localhost:3001/api/channels/unread\" -Headers @{Authorization=\"Bearer $token\"} -UseBasicParsing; Write-Host \"Unread response:\" $unread.Content.Substring\\(0, [Math]::Min\\(200, $unread.Content.Length\\)\\))"
+    ]
+  }
+}

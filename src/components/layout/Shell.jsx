@@ -1,0 +1,224 @@
+import { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import {
+  LayoutDashboard, CheckSquare, MessageSquare, Calendar, Clock,
+  PalmtreeIcon, Folder, Megaphone, User, Users, LogOut,
+  Bell, Settings, Search, ChevronUp, Video,
+} from 'lucide-react';
+import { useApp } from '../../context/AppContext';
+import { Avatar, IconBtn, NotificationToast } from '../ui';
+
+const NAV = [
+  {
+    label: 'Workspace',
+    items: [
+      { path: '/dashboard',     icon: LayoutDashboard, label: 'Dashboard' },
+      { path: '/tasks',         icon: CheckSquare,     label: 'Tasks' },
+      { path: '/messages',      icon: MessageSquare,   label: 'Messages' },
+      { path: '/meetings',      icon: Video,           label: 'Meetings' },
+    ],
+  },
+  {
+    label: 'HR',
+    items: [
+      { path: '/attendance',    icon: Clock,           label: 'Attendance' },
+      { path: '/leave',         icon: PalmtreeIcon,    label: 'Leave' },
+      { path: '/documents',     icon: Folder,          label: 'Documents' },
+    ],
+  },
+  {
+    label: 'Company',
+    items: [
+      { path: '/announcements', icon: Megaphone,       label: 'Announcements' },
+    ],
+  },
+];
+
+const FOUNDER_NAV = [
+  {
+    label: 'Admin',
+    items: [
+      { path: '/admin',         icon: Users,           label: 'Team & Admin' },
+    ],
+  },
+];
+
+function NavItem({ icon: Icon, label, path, active, onClick, badge }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 10,
+        padding: '8px 10px', borderRadius: 8, fontSize: 13, fontWeight: 500,
+        color: active ? 'var(--fg-1)' : 'var(--fg-2)',
+        background: active ? '#fff' : hover ? 'var(--bg-3)' : 'transparent',
+        boxShadow: active ? 'var(--shadow-xs)' : 'none', cursor: 'pointer',
+        transition: 'background 120ms var(--ease-out)' }}>
+      {active && (
+        <span style={{ position: 'absolute', left: -10, top: 8, bottom: 8, width: 3, borderRadius: 2,
+          background: 'var(--brand-gradient)' }} />
+      )}
+      <Icon size={18} color={active ? 'var(--accent)' : 'var(--fg-3)'} />
+      <span style={{ flex: 1 }}>{label}</span>
+      {badge > 0 && (
+        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 6px', borderRadius: 6, minWidth: 18, textAlign: 'center',
+          background: path === '/messages' ? 'var(--accent)' : 'var(--accent-tint)',
+          color: path === '/messages' ? '#fff' : 'var(--accent-press)' }}>
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
+    </div>
+  );
+}
+
+export function Shell({ children }) {
+  const { state, logout, toasts, dismissToast } = useApp();
+  const { currentUser, leaves, unreadCounts, announcements } = state;
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [searchVal, setSearchVal] = useState('');
+
+  const pendingLeaves = (leaves || []).filter(l => l.status === 'Pending').length;
+
+  // Total unread message count across all channels
+  const totalUnread = Object.values(unreadCounts || {}).reduce((a, b) => a + b, 0);
+
+  // New announcements in last 24h (for badge on Announcements nav item)
+  const recentAnn = (announcements || []).filter(a => {
+    if (!a.createdAt) return false;
+    return Date.now() - new Date(a.createdAt).getTime() < 24 * 3600 * 1000;
+  }).length;
+
+  function getBadge(path) {
+    if (path === '/messages') return totalUnread;
+    if (path === '/leave' && currentUser?.role === 'founder') return pendingLeaves;
+    if (path === '/announcements') return recentAnn;
+    return 0;
+  }
+
+  const navGroups = currentUser?.role === 'founder'
+    ? [...NAV, ...FOUNDER_NAV]
+    : NAV;
+
+  return (
+    <div style={{ display: 'flex', height: '100vh', background: 'var(--bg-0)', overflow: 'hidden' }}>
+      {/* Toast notifications */}
+      <NotificationToast
+        toasts={toasts}
+        onDismiss={dismissToast}
+        onNavigate={(path) => navigate(path)}
+      />
+
+      {/* Sidebar */}
+      <aside style={{ width: 240, flexShrink: 0, background: 'var(--bg-1)', borderRight: '1px solid var(--border-1)',
+        display: 'flex', flexDirection: 'column', padding: '14px 14px', gap: 4, overflow: 'auto' }}>
+        {/* Logo */}
+        <div style={{ padding: '4px 4px 14px', display: 'flex', alignItems: 'center' }}>
+          <img
+            src="/digichain-logo.png"
+            alt="Digichain Pioneers"
+            onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
+            style={{ width: 172, maxWidth: '100%', height: 'auto', display: 'block' }}
+          />
+          {/* Fallback text logo */}
+          <div style={{ display: 'none', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--brand-gradient)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontWeight: 800, fontSize: 16, flexShrink: 0 }}>D</div>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--fg-1)' }}>Digichain</span>
+          </div>
+        </div>
+
+        {/* Nav groups */}
+        {navGroups.map(group => (
+          <div key={group.label} style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase',
+              color: 'var(--fg-4)', padding: '10px 10px 4px' }}>{group.label}</span>
+            {group.items.map(item => (
+              <NavItem key={item.path} icon={item.icon} label={item.label} path={item.path}
+                active={location.pathname === item.path}
+                badge={getBadge(item.path)}
+                onClick={() => navigate(item.path)} />
+            ))}
+          </div>
+        ))}
+
+        {/* User section */}
+        <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: '1px solid var(--border-1)', position: 'relative' }}>
+          <div onClick={() => setProfileOpen(!profileOpen)}
+            style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 6px',
+              borderRadius: 10, cursor: 'pointer', transition: 'background 120ms' }}
+            onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-3)'}
+            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+            <Avatar name={currentUser?.name || ''} size={36} src={currentUser?.avatar} status="online" />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{currentUser?.name}</div>
+              <div style={{ fontSize: 11, color: 'var(--fg-3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{currentUser?.title}</div>
+            </div>
+            <ChevronUp size={14} color="var(--fg-3)" style={{ transform: profileOpen ? 'rotate(0)' : 'rotate(180deg)', transition: 'transform 180ms' }} />
+          </div>
+          {profileOpen && (
+            <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, background: '#fff',
+              border: '1px solid var(--border-1)', borderRadius: 12, boxShadow: 'var(--shadow-md)',
+              padding: 8, marginBottom: 4, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              {[
+                { icon: User, label: 'My Profile', action: () => { navigate('/profile'); setProfileOpen(false); } },
+                { icon: Settings, label: 'Settings', action: () => { navigate('/profile'); setProfileOpen(false); } },
+              ].map(item => (
+                <div key={item.label} onClick={item.action}
+                  style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8,
+                    fontSize: 13, fontWeight: 500, cursor: 'pointer', color: 'var(--fg-1)' }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-2)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                  <item.icon size={16} color="var(--fg-3)" />{item.label}
+                </div>
+              ))}
+              <div style={{ height: 1, background: 'var(--border-1)', margin: '4px 0' }} />
+              <div onClick={() => logout()}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 8,
+                  fontSize: 13, fontWeight: 500, cursor: 'pointer', color: '#ad2236' }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--danger-tint)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                <LogOut size={16} />Sign out
+              </div>
+            </div>
+          )}
+        </div>
+      </aside>
+
+      {/* Main */}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+        {/* Topbar */}
+        <header style={{ height: 56, flexShrink: 0, borderBottom: '1px solid var(--border-1)',
+          background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(12px)',
+          display: 'flex', alignItems: 'center', gap: 14, padding: '0 24px',
+          position: 'sticky', top: 0, zIndex: 10 }}>
+          <div style={{ flex: 1 }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px',
+            background: 'var(--bg-2)', borderRadius: 10, width: 300 }}>
+            <Search size={14} color="var(--fg-3)" />
+            <input value={searchVal} onChange={e => setSearchVal(e.target.value)}
+              placeholder="Search tasks, people, documents…"
+              style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none',
+                fontFamily: 'inherit', fontSize: 13, color: 'var(--fg-1)' }} />
+          </div>
+          <IconBtn
+            icon={Bell}
+            badge={totalUnread + (currentUser?.role === 'founder' ? pendingLeaves : 0)}
+            title="Notifications"
+            onClick={() => navigate(totalUnread > 0 ? '/messages' : '/leave')}
+          />
+          <IconBtn icon={User} title="Profile" onClick={() => navigate('/profile')} />
+          <div style={{ width: 1, height: 24, background: 'var(--border-1)' }} />
+          <Avatar name={currentUser?.name || ''} size={32} src={currentUser?.avatar}
+            style={{ cursor: 'pointer' }} onClick={() => navigate('/profile')} />
+        </header>
+
+        {/* Content */}
+        <main style={{ flex: 1, overflow: 'auto', padding: '28px 32px' }}>
+          {children}
+        </main>
+      </div>
+    </div>
+  );
+}

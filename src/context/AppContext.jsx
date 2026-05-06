@@ -1,0 +1,461 @@
+import { createContext, useContext, useReducer, useEffect, useCallback, useRef, useState } from 'react';
+import {
+  authApi, usersApi, attendanceApi, leavesApi, tasksApi,
+  messagesApi, announcementsApi, documentsApi, meetingsApi
+} from '../api/index.js';
+
+const AppContext = createContext(null);
+
+// ─── Reducer ──────────────────────────────────────────────────────────────────
+const initialState = {
+  currentUser: null,
+  users: [],
+  attendance: [],
+  todayAttendance: null,
+  leaves: [],
+  tasks: [],
+  channels: [],
+  channelMessages: {},     // { [channelId]: Message[] }
+  channelSeenBy: {},       // { [channelId]: { userId: ISOString } }
+  unreadCounts: {},        // { [channelId]: number }
+  announcements: [],
+  documents: [],
+  meetings: [],
+  loading: true,
+  loginError: null,
+};
+
+function reducer(state, action) {
+  switch (action.type) {
+
+    case 'SET_USER':        return { ...state, currentUser: action.user };
+    case 'SET_USERS':       return { ...state, users: action.users };
+    case 'SET_ATTENDANCE':  return { ...state, attendance: action.records };
+    case 'SET_TODAY':       return { ...state, todayAttendance: action.record };
+    case 'SET_LEAVES':      return { ...state, leaves: action.leaves };
+    case 'SET_TASKS':       return { ...state, tasks: action.tasks };
+    case 'SET_CHANNELS':    return { ...state, channels: action.channels };
+    case 'SET_ANNOUNCEMENTS': return { ...state, announcements: action.announcements };
+    case 'SET_DOCUMENTS':   return { ...state, documents: action.documents };
+    case 'SET_MEETINGS':    return { ...state, meetings: action.meetings };
+    case 'SET_LOADING':     return { ...state, loading: action.loading };
+
+    case 'SET_MESSAGES':
+      return {
+        ...state,
+        channelMessages: { ...state.channelMessages, [action.channelId]: action.messages },
+        channelSeenBy: { ...state.channelSeenBy, [action.channelId]: action.seenBy || {} },
+      };
+
+    case 'SET_UNREAD_COUNTS':
+      return { ...state, unreadCounts: action.counts };
+
+    case 'CLEAR_UNREAD':
+      return { ...state, unreadCounts: { ...state.unreadCounts, [action.channelId]: 0 } };
+
+    case 'UPDATE_SEEN_BY':
+      return {
+        ...state,
+        channelSeenBy: {
+          ...state.channelSeenBy,
+          [action.channelId]: {
+            ...(state.channelSeenBy[action.channelId] || {}),
+            [action.userId]: action.ts,
+          },
+        },
+      };
+
+    case 'LOGIN_ERROR':       return { ...state, loginError: action.message };
+    case 'LOGIN_ERROR_CLEAR': return { ...state, loginError: null };
+    case 'LOGOUT':            return { ...initialState, loading: false };
+
+    case 'SIGN_IN':
+      return { ...state, todayAttendance: action.record, attendance: [action.record, ...state.attendance] };
+    case 'SIGN_OUT': {
+      const updated = action.record;
+      return {
+        ...state,
+        todayAttendance: updated,
+        attendance: state.attendance.map(a => a.id === updated.id ? updated : a),
+      };
+    }
+
+    case 'ADD_LEAVE':    return { ...state, leaves: [action.leave, ...state.leaves] };
+    case 'UPDATE_LEAVE': return { ...state, leaves: state.leaves.map(l => l.id === action.leave.id ? action.leave : l) };
+    case 'REMOVE_LEAVE': return { ...state, leaves: state.leaves.filter(l => l.id !== action.id) };
+
+    case 'ADD_TASK':    return { ...state, tasks: [action.task, ...state.tasks] };
+    case 'UPDATE_TASK': return { ...state, tasks: state.tasks.map(t => t.id === action.task.id ? action.task : t) };
+    case 'REMOVE_TASK': return { ...state, tasks: state.tasks.filter(t => t.id !== action.id) };
+    case 'ADD_TASK_COMMENT': {
+      const tasks = state.tasks.map(t => {
+        if (t.id !== action.taskId) return t;
+        return { ...t, comments: [...(t.comments || []), action.comment] };
+      });
+      return { ...state, tasks };
+    }
+
+    case 'ADD_CHANNEL': {
+      const exists = state.channels.find(c => c.id === action.channel.id);
+      if (exists) return state;
+      return { ...state, channels: [...state.channels, action.channel] };
+    }
+    case 'ADD_MESSAGE': {
+      const prev = state.channelMessages[action.channelId] || [];
+      return {
+        ...state,
+        channelMessages: { ...state.channelMessages, [action.channelId]: [...prev, action.message] },
+      };
+    }
+    case 'UPDATE_MESSAGE': {
+      const msgs = (state.channelMessages[action.channelId] || []).map(m =>
+        m.id === action.message.id ? action.message : m
+      );
+      return { ...state, channelMessages: { ...state.channelMessages, [action.channelId]: msgs } };
+    }
+
+    case 'ADD_ANNOUNCEMENT':    return { ...state, announcements: [action.ann, ...state.announcements] };
+    case 'UPDATE_ANNOUNCEMENT': return { ...state, announcements: state.announcements.map(a => a.id === action.ann.id ? action.ann : a) };
+    case 'REMOVE_ANNOUNCEMENT': return { ...state, announcements: state.announcements.filter(a => a.id !== action.id) };
+
+    case 'ADD_DOCUMENT':    return { ...state, documents: [action.doc, ...state.documents] };
+    case 'REMOVE_DOCUMENT': return { ...state, documents: state.documents.filter(d => d.id !== action.id) };
+
+    case 'ADD_MEETING':    return { ...state, meetings: [action.meeting, ...state.meetings] };
+    case 'UPDATE_MEETING': return { ...state, meetings: state.meetings.map(m => m.id === action.meeting.id ? action.meeting : m) };
+    case 'REMOVE_MEETING': return { ...state, meetings: state.meetings.filter(m => m.id !== action.id) };
+
+    case 'ADD_USER':    return { ...state, users: [...state.users, action.user] };
+    case 'UPDATE_USER': {
+      const users = state.users.map(u => u.id === action.user.id ? action.user : u);
+      const currentUser = state.currentUser?.id === action.user.id ? action.user : state.currentUser;
+      return { ...state, users, currentUser };
+    }
+    case 'REMOVE_USER': return { ...state, users: state.users.filter(u => u.id !== action.id) };
+
+    default: return state;
+  }
+}
+
+// ─── Provider ─────────────────────────────────────────────────────────────────
+export function AppProvider({ children }) {
+  const [state, dispatch] = useReducer(reducer, initialState);
+  const [toasts, setToasts] = useState([]);
+  const prevUnreadRef = useRef({});
+  const prevAnnouncementCountRef = useRef(0);
+
+  // ── Toast helpers ────────────────────────────────────────────────────────────
+  function addToast(toast) {
+    const id = Date.now() + Math.random();
+    setToasts(prev => [...prev.slice(-2), { ...toast, id }]); // max 3 toasts
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 5500);
+  }
+  function dismissToast(id) {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }
+
+  // ── Load all app data ────────────────────────────────────────────────────────
+  const loadAppData = useCallback(async () => {
+    try {
+      const [users, attendance, todayList, leaves, tasks, channels, announcements, documents, meetings, unreadCounts] =
+        await Promise.all([
+          usersApi.list(),
+          attendanceApi.list(),
+          attendanceApi.today(),
+          leavesApi.list(),
+          tasksApi.list(),
+          messagesApi.listChannels(),
+          announcementsApi.list(),
+          documentsApi.list(),
+          meetingsApi.list(),
+          messagesApi.getUnread().catch(() => ({})),
+        ]);
+      dispatch({ type: 'SET_USERS', users });
+      dispatch({ type: 'SET_ATTENDANCE', records: attendance });
+      dispatch({ type: 'SET_TODAY', record: todayList[0] || null });
+      dispatch({ type: 'SET_LEAVES', leaves });
+      dispatch({ type: 'SET_TASKS', tasks });
+      dispatch({ type: 'SET_CHANNELS', channels });
+      dispatch({ type: 'SET_ANNOUNCEMENTS', announcements });
+      dispatch({ type: 'SET_DOCUMENTS', documents });
+      dispatch({ type: 'SET_MEETINGS', meetings });
+      dispatch({ type: 'SET_UNREAD_COUNTS', counts: unreadCounts });
+      prevUnreadRef.current = unreadCounts;
+      prevAnnouncementCountRef.current = announcements.length;
+    } catch (err) {
+      console.error('Failed to load app data', err);
+    } finally {
+      dispatch({ type: 'SET_LOADING', loading: false });
+    }
+  }, []);
+
+  // ── Session restore ──────────────────────────────────────────────────────────
+  useEffect(() => {
+    const token = localStorage.getItem('dw_token');
+    if (!token) {
+      dispatch({ type: 'SET_LOADING', loading: false });
+      return;
+    }
+    authApi.me()
+      .then(user => {
+        dispatch({ type: 'SET_USER', user });
+        return loadAppData();
+      })
+      .catch(() => {
+        localStorage.removeItem('dw_token');
+        dispatch({ type: 'SET_LOADING', loading: false });
+      });
+  }, [loadAppData]);
+
+  // ── Notification polling (every 12s) ─────────────────────────────────────────
+  useEffect(() => {
+    if (!state.currentUser) return;
+
+    const poll = async () => {
+      try {
+        // Poll unread message counts
+        const newCounts = await messagesApi.getUnread();
+        const prev = prevUnreadRef.current;
+        let hasNewMsg = false;
+        let newMsgCount = 0;
+        Object.entries(newCounts).forEach(([chId, count]) => {
+          const prevCount = prev[chId] || 0;
+          if (count > prevCount) {
+            hasNewMsg = true;
+            newMsgCount += count - prevCount;
+          }
+        });
+        if (hasNewMsg) {
+          addToast({
+            type: 'message',
+            title: 'New Messages',
+            body: `You have ${newMsgCount} new message${newMsgCount > 1 ? 's' : ''}`,
+            path: '/messages',
+          });
+        }
+        prevUnreadRef.current = newCounts;
+        dispatch({ type: 'SET_UNREAD_COUNTS', counts: newCounts });
+
+        // Poll announcements for new ones
+        const latestAnn = await announcementsApi.list();
+        const prevCount = prevAnnouncementCountRef.current;
+        if (latestAnn.length > prevCount && prevCount > 0) {
+          const newest = latestAnn[0];
+          addToast({
+            type: 'announcement',
+            title: newest.title,
+            body: newest.content?.slice(0, 80) + (newest.content?.length > 80 ? '…' : ''),
+            path: '/announcements',
+          });
+          dispatch({ type: 'SET_ANNOUNCEMENTS', announcements: latestAnn });
+        }
+        prevAnnouncementCountRef.current = latestAnn.length;
+      } catch {}
+    };
+
+    const interval = setInterval(poll, 12000);
+    return () => clearInterval(interval);
+  }, [state.currentUser?.id]); // eslint-disable-line
+
+  // ── Auth ─────────────────────────────────────────────────────────────────────
+  async function login(email, password) {
+    dispatch({ type: 'LOGIN_ERROR_CLEAR' });
+    try {
+      const { token, user } = await authApi.login(email, password);
+      localStorage.setItem('dw_token', token);
+      dispatch({ type: 'SET_USER', user });
+      dispatch({ type: 'SET_LOADING', loading: true });
+      await loadAppData();
+    } catch (err) {
+      dispatch({ type: 'LOGIN_ERROR', message: err.message || 'Invalid email or password.' });
+    }
+  }
+
+  function logout() {
+    localStorage.removeItem('dw_token');
+    dispatch({ type: 'LOGOUT' });
+  }
+
+  // ── Attendance ───────────────────────────────────────────────────────────────
+  async function signIn(location) {
+    const record = await attendanceApi.signIn(location);
+    dispatch({ type: 'SIGN_IN', record });
+    return record;
+  }
+  async function signOut() {
+    const record = await attendanceApi.signOut();
+    dispatch({ type: 'SIGN_OUT', record });
+    return record;
+  }
+
+  // ── Leaves ───────────────────────────────────────────────────────────────────
+  async function applyLeave(data) {
+    const leave = await leavesApi.apply(data);
+    dispatch({ type: 'ADD_LEAVE', leave });
+    return leave;
+  }
+  async function updateLeaveStatus(id, status) {
+    const leave = await leavesApi.update(id, status);
+    dispatch({ type: 'UPDATE_LEAVE', leave });
+    return leave;
+  }
+  async function deleteLeave(id) {
+    await leavesApi.remove(id);
+    dispatch({ type: 'REMOVE_LEAVE', id });
+  }
+
+  // ── Tasks ────────────────────────────────────────────────────────────────────
+  async function createTask(data) {
+    const task = await tasksApi.create(data);
+    dispatch({ type: 'ADD_TASK', task });
+    return task;
+  }
+  async function updateTask(id, data) {
+    const task = await tasksApi.update(id, data);
+    dispatch({ type: 'UPDATE_TASK', task });
+    return task;
+  }
+  async function deleteTask(id) {
+    await tasksApi.remove(id);
+    dispatch({ type: 'REMOVE_TASK', id });
+  }
+  async function addTaskComment(taskId, text) {
+    const comment = await tasksApi.addComment(taskId, text);
+    dispatch({ type: 'ADD_TASK_COMMENT', taskId, comment });
+    return comment;
+  }
+
+  // ── Messages ─────────────────────────────────────────────────────────────────
+  async function loadMessages(channelId) {
+    const { messages, seenBy } = await messagesApi.getMessages(channelId);
+    dispatch({ type: 'SET_MESSAGES', channelId, messages, seenBy });
+    return messages;
+  }
+  async function sendMessage(channelId, text) {
+    const message = await messagesApi.sendMessage(channelId, text);
+    dispatch({ type: 'ADD_MESSAGE', channelId, message });
+    return message;
+  }
+  async function sendFile(channelId, file, text) {
+    const message = await messagesApi.uploadFile(channelId, file, text);
+    dispatch({ type: 'ADD_MESSAGE', channelId, message });
+    return message;
+  }
+  async function reactToMessage(channelId, messageId, emoji) {
+    const message = await messagesApi.react(channelId, messageId, emoji);
+    dispatch({ type: 'UPDATE_MESSAGE', channelId, message });
+    return message;
+  }
+  async function ensureDm(otherUserId) {
+    const channel = await messagesApi.ensureDm(otherUserId);
+    dispatch({ type: 'ADD_CHANNEL', channel });
+    return channel;
+  }
+  async function createChannel(data) {
+    const channel = await messagesApi.createChannel(data);
+    dispatch({ type: 'ADD_CHANNEL', channel });
+    return channel;
+  }
+  async function markChannelRead(channelId) {
+    try {
+      await messagesApi.markRead(channelId);
+      const ts = new Date().toISOString();
+      if (state.currentUser) {
+        dispatch({ type: 'UPDATE_SEEN_BY', channelId, userId: state.currentUser.id, ts });
+      }
+      dispatch({ type: 'CLEAR_UNREAD', channelId });
+      prevUnreadRef.current = { ...prevUnreadRef.current, [channelId]: 0 };
+    } catch {}
+  }
+
+  // ── Announcements ────────────────────────────────────────────────────────────
+  async function createAnnouncement(data) {
+    const ann = await announcementsApi.create(data);
+    dispatch({ type: 'ADD_ANNOUNCEMENT', ann });
+    return ann;
+  }
+  async function updateAnnouncement(id, data) {
+    const ann = await announcementsApi.update(id, data);
+    dispatch({ type: 'UPDATE_ANNOUNCEMENT', ann });
+    return ann;
+  }
+  async function deleteAnnouncement(id) {
+    await announcementsApi.remove(id);
+    dispatch({ type: 'REMOVE_ANNOUNCEMENT', id });
+  }
+  async function reactToAnnouncement(id, emoji) {
+    const ann = await announcementsApi.react(id, emoji);
+    dispatch({ type: 'UPDATE_ANNOUNCEMENT', ann });
+    return ann;
+  }
+
+  // ── Documents ────────────────────────────────────────────────────────────────
+  async function uploadDocument(file, folder, description) {
+    const doc = await documentsApi.upload(file, folder, description);
+    dispatch({ type: 'ADD_DOCUMENT', doc });
+    return doc;
+  }
+  async function deleteDocument(id) {
+    await documentsApi.remove(id);
+    dispatch({ type: 'REMOVE_DOCUMENT', id });
+  }
+
+  // ── Meetings ─────────────────────────────────────────────────────────────────
+  async function createMeeting(data) {
+    const meeting = await meetingsApi.create(data);
+    dispatch({ type: 'ADD_MEETING', meeting });
+    return meeting;
+  }
+  async function updateMeeting(id, data) {
+    const meeting = await meetingsApi.update(id, data);
+    dispatch({ type: 'UPDATE_MEETING', meeting });
+    return meeting;
+  }
+  async function deleteMeeting(id) {
+    await meetingsApi.remove(id);
+    dispatch({ type: 'REMOVE_MEETING', id });
+  }
+
+  // ── Users (admin) ────────────────────────────────────────────────────────────
+  async function createUser(data) {
+    const user = await usersApi.create(data);
+    dispatch({ type: 'ADD_USER', user });
+    return user;
+  }
+  async function updateUser(id, data) {
+    const user = await usersApi.update(id, data);
+    dispatch({ type: 'UPDATE_USER', user });
+    return user;
+  }
+  async function deleteUser(id) {
+    await usersApi.remove(id);
+    dispatch({ type: 'REMOVE_USER', id });
+  }
+  async function uploadAvatar(id, file) {
+    const user = await usersApi.uploadAvatar(id, file);
+    dispatch({ type: 'UPDATE_USER', user });
+    return user;
+  }
+
+  const value = {
+    state,
+    dispatch,
+    toasts,
+    dismissToast,
+    addToast,
+    // actions
+    login, logout,
+    signIn, signOut,
+    applyLeave, updateLeaveStatus, deleteLeave,
+    createTask, updateTask, deleteTask, addTaskComment,
+    loadMessages, sendMessage, sendFile, reactToMessage, ensureDm, createChannel, markChannelRead,
+    createAnnouncement, updateAnnouncement, deleteAnnouncement, reactToAnnouncement,
+    uploadDocument, deleteDocument,
+    createMeeting, updateMeeting, deleteMeeting,
+    createUser, updateUser, deleteUser, uploadAvatar,
+  };
+
+  return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
+}
+
+export function useApp() { return useContext(AppContext); }

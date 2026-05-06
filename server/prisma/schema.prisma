@@ -1,0 +1,164 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String   @id @default(cuid())
+  name       String
+  email      String   @unique
+  password   String
+  role       String   @default("employee")
+  title      String?
+  department String?
+  phone      String?
+  bio        String?
+  joinDate   String?
+  avatar     String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  attendance    Attendance[]
+  leavesApplied Leave[]        @relation("ApplicantLeaves")
+  tasksAssigned Task[]         @relation("AssignedTasks")
+  tasksReported Task[]         @relation("ReportedTasks")
+  comments      TaskComment[]
+  messages      Message[]
+  announcements  Announcement[]
+  documents      Document[]
+  meetingsHosted Meeting[]
+}
+
+model Attendance {
+  id       String  @id @default(cuid())
+  userId   String
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  date     String
+  signIn   String?
+  signOut  String?
+  hours    String?
+  status   String  @default("Present")
+  location String?
+
+  @@unique([userId, date])
+}
+
+model Leave {
+  id         String  @id @default(cuid())
+  userId     String
+  user       User    @relation("ApplicantLeaves", fields: [userId], references: [id], onDelete: Cascade)
+  type       String
+  fromDate   String
+  toDate     String
+  days       Int
+  reason     String
+  status     String  @default("Pending")
+  approverId String?
+  appliedOn  String
+  createdAt  DateTime @default(now())
+}
+
+model Task {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  priority    String   @default("Medium")
+  dueDate     String?
+  status      String   @default("Pending")
+  assigneeId  String?
+  assignee    User?    @relation("AssignedTasks", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reporterId  String?
+  reporter    User?    @relation("ReportedTasks", fields: [reporterId], references: [id], onDelete: SetNull)
+  tags        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  comments    TaskComment[]
+}
+
+model TaskComment {
+  id        String   @id @default(cuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  text      String
+  createdAt DateTime @default(now())
+}
+
+model Channel {
+  id          String    @id @default(cuid())
+  name        String
+  type        String    @default("channel")
+  description String?
+  memberIds   String
+  createdAt   DateTime  @default(now())
+  messages    Message[]
+}
+
+model Message {
+  id             String   @id @default(cuid())
+  channelId      String
+  channel        Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  senderId       String
+  sender         User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  text           String?
+  attachmentUrl  String?
+  attachmentName String?
+  attachmentType String?
+  reactions      String   @default("[]")
+  timestamp      DateTime @default(now())
+}
+
+model Announcement {
+  id        String   @id @default(cuid())
+  authorId  String
+  author    User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  title     String
+  content   String
+  category  String   @default("General")
+  pinned    Boolean  @default(false)
+  reactions String   @default("[]")
+  createdAt DateTime @default(now())
+}
+
+model Document {
+  id          String   @id @default(cuid())
+  name        String
+  folder      String   @default("General")
+  size        String?
+  type        String?
+  url         String?
+  description String?
+  uploaderId  String
+  uploader    User     @relation(fields: [uploaderId], references: [id], onDelete: Cascade)
+  uploadedAt  DateTime @default(now())
+}
+
+model Meeting {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  organizerId String
+  organizer   User     @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+  attendeeIds String
+  date        String
+  time        String
+  duration    String   @default("30 min")
+  meetLink    String?
+  recurring   String?
+  status      String   @default("upcoming")
+  createdAt   DateTime @default(now())
+}
+
+model ChannelRead {
+  id         String   @id @default(cuid())
+  channelId  String
+  userId     String
+  lastReadAt DateTime @default(now())
+
+  @@unique([channelId, userId])
+}

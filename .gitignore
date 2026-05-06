@@ -1,0 +1,9 @@
+node_modules/
+server/node_modules/
+server/prisma/dev.db
+server/uploads/
+dist/
+.env
+.env.example.local
+server/.env
+server/.env.local
