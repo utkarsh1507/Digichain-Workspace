@@ -105,7 +105,8 @@ export default function App() {
     return () => mq.removeEventListener('change', handler);
   }, []);
 
-  if (isMobile) return <MobileBlock />;
+  // Never block the OAuth callback popup — it opens at popup width (~520px)
+  if (isMobile && !window.location.pathname.startsWith('/google-callback')) return <MobileBlock />;
 
   // Show spinner while restoring session on initial load
   if (state.loading && !state.currentUser) {
