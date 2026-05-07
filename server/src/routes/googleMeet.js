@@ -1,14 +1,15 @@
 const router = require('express').Router();
+const { PrismaClient } = require('@prisma/client');
 
+const prisma = new PrismaClient();
 const CLIENT_ID     = process.env.GOOGLE_CLIENT_ID;
 const CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET;
-const REDIRECT_URI  = process.env.GOOGLE_REDIRECT_URI; // e.g. https://your-render-server.onrender.com/api/google/callback
+const REDIRECT_URI  = process.env.GOOGLE_REDIRECT_URI;
 
-// In-memory token store  userId → { access_token, refresh_token, expiry_date }
-// Acceptable for a 15-person team; survives until server restarts.
-const tokenStore = {};
+// In-memory cache: userId → tokens object. Warm on first use, survives within a process.
+// DB is the source of truth so tokens survive Render restarts.
+const tokenCache = {};
 
-// Lazy-load googleapis so the server still starts if the package isn't installed yet
 function getGoogleAPIs() {
   try { return require('googleapis'); }
   catch { return null; }
@@ -20,8 +21,37 @@ function isConfigured() {
 
 function makeOAuth2Client() {
   const { google } = getGoogleAPIs();
-  const client = new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
-  return client;
+  return new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
+}
+
+// Persist tokens to DB and warm the in-memory cache
+async function saveTokens(userId, tokens) {
+  tokenCache[userId] = tokens;
+  await prisma.user.update({
+    where: { id: userId },
+    data: {
+      googleAccessToken:  tokens.access_token  || null,
+      googleRefreshToken: tokens.refresh_token  || null,
+      googleTokenExpiry:  tokens.expiry_date != null ? BigInt(tokens.expiry_date) : null,
+    },
+  });
+}
+
+// Load tokens from cache or DB
+async function loadTokens(userId) {
+  if (tokenCache[userId]) return tokenCache[userId];
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { googleAccessToken: true, googleRefreshToken: true, googleTokenExpiry: true },
+  });
+  if (!user?.googleAccessToken) return null;
+  const tokens = {
+    access_token:  user.googleAccessToken,
+    refresh_token: user.googleRefreshToken || undefined,
+    expiry_date:   user.googleTokenExpiry != null ? Number(user.googleTokenExpiry) : undefined,
+  };
+  tokenCache[userId] = tokens;
+  return tokens;
 }
 
 // Parse "10:30 AM" / "14:00" → { hours, minutes }
@@ -35,29 +65,30 @@ function parseTime(timeStr = '') {
   return { hours: h || 0, minutes: m || 0 };
 }
 
-// Pick the best client URL — prefer the first non-localhost entry so that
-// production deployments are not accidentally redirected to localhost.
+function istWallClock(date = new Date()) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, hourCycle: 'h23',
+    }).formatToParts(date).map(p => [p.type, p.value])
+  );
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}:${parts.second}`;
+}
+
 function pickClientUrl() {
   const urls = (process.env.CLIENT_URL || 'http://localhost:5174')
-    .split(',')
-    .map(u => u.trim())
-    .filter(Boolean);
+    .split(',').map(u => u.trim()).filter(Boolean);
   return urls.find(u => !u.includes('localhost') && !u.includes('127.0.0.1')) || urls[0];
 }
 
 // ── GET /api/google/auth?userId=xxx ─────────────────────────────────────────
-// Starts the OAuth popup flow
 router.get('/auth', (req, res) => {
   if (!isConfigured()) {
-    return res.status(503).send('Google Meet API is not configured on this server. Add GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI to your environment variables.');
+    return res.status(503).send('Google Meet API is not configured. Add GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI.');
   }
   const { userId } = req.query;
-  // Store the client origin in state so the callback redirects back correctly
-  const origin = req.get('Referer')
-    ? new URL(req.get('Referer')).origin
-    : pickClientUrl();
-  const oauth2Client = makeOAuth2Client();
-  const url = oauth2Client.generateAuthUrl({
+  const origin = req.get('Referer') ? new URL(req.get('Referer')).origin : pickClientUrl();
+  const url = makeOAuth2Client().generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
     scope: ['https://www.googleapis.com/auth/calendar.events'],
@@ -67,10 +98,8 @@ router.get('/auth', (req, res) => {
 });
 
 // ── GET /api/google/callback ─────────────────────────────────────────────────
-// Google redirects here after the user grants permission
 router.get('/callback', async (req, res) => {
   const { code, state, error } = req.query;
-
   let userId = '';
   let clientUrl = pickClientUrl();
   try {
@@ -86,7 +115,7 @@ router.get('/callback', async (req, res) => {
   try {
     const oauth2Client = makeOAuth2Client();
     const { tokens } = await oauth2Client.getToken(code);
-    if (userId) tokenStore[userId] = tokens;
+    if (userId) await saveTokens(userId, tokens);
     res.redirect(`${clientUrl}/google-callback?success=1`);
   } catch (err) {
     console.error('Google OAuth callback error:', err.message);
@@ -95,69 +124,61 @@ router.get('/callback', async (req, res) => {
 });
 
 // ── GET /api/google/status?userId=xxx ───────────────────────────────────────
-router.get('/status', (req, res) => {
+router.get('/status', async (req, res) => {
   const { userId } = req.query;
-  res.json({
-    configured: isConfigured(),
-    connected: !!(userId && tokenStore[userId]),
-  });
+  let connected = false;
+  if (userId) {
+    const tokens = await loadTokens(userId);
+    connected = !!tokens;
+  }
+  res.json({ configured: isConfigured(), connected });
 });
 
 // ── POST /api/google/create-meet ─────────────────────────────────────────────
-// Body: { userId, title, description, date, time, duration }
-// Returns: { meetLink }
 router.post('/create-meet', async (req, res) => {
   if (!isConfigured()) {
     return res.status(503).json({ error: 'Google Meet API not configured', notConfigured: true });
   }
 
   const { userId, title, description, date, time, duration } = req.body;
+  if (!userId) return res.status(400).json({ error: 'userId required' });
 
-  if (!userId || !tokenStore[userId]) {
+  const tokens = await loadTokens(userId);
+  if (!tokens) {
     return res.status(401).json({ error: 'Google account not connected', needsAuth: true });
   }
 
   try {
     const { google } = getGoogleAPIs();
     const oauth2Client = makeOAuth2Client();
-    oauth2Client.setCredentials(tokenStore[userId]);
+    oauth2Client.setCredentials(tokens);
 
-    // Auto-refresh tokens
-    oauth2Client.on('tokens', (newTokens) => {
-      tokenStore[userId] = { ...tokenStore[userId], ...newTokens };
+    // Persist refreshed tokens back to DB so they stay valid long-term
+    oauth2Client.on('tokens', async (newTokens) => {
+      const merged = { ...tokens, ...newTokens };
+      tokenCache[userId] = merged;
+      await prisma.user.update({
+        where: { id: userId },
+        data: {
+          googleAccessToken:  merged.access_token  || null,
+          googleRefreshToken: merged.refresh_token  || null,
+          googleTokenExpiry:  merged.expiry_date != null ? BigInt(merged.expiry_date) : null,
+        },
+      }).catch(e => console.error('Token persist error:', e.message));
     });
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-    // Build start + end DateTimes — always wall-clock strings without Z suffix
-    // so that timeZone: 'Asia/Kolkata' is applied unambiguously by Google.
     const durationMins = parseInt(duration) || 30;
     let startISO;
     if (date) {
       const { hours, minutes } = parseTime(time || '10:00 AM');
       startISO = `${date}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
     } else {
-      // Instant meet — use current IST wall-clock time
-      const now = new Date();
-      const istParts = Object.fromEntries(
-        new Intl.DateTimeFormat('en-IN', {
-          timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
-          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, hourCycle: 'h23',
-        }).formatToParts(now).map(p => [p.type, p.value])
-      );
-      startISO = `${istParts.year}-${istParts.month}-${istParts.day}T${istParts.hour}:${istParts.minute}:${istParts.second}`;
+      startISO = istWallClock();
     }
 
-    const startMs = new Date(startISO + '+05:30').getTime();
-    const endMs   = startMs + durationMins * 60 * 1000;
-    const endDate = new Date(endMs);
-    const endISTparts = Object.fromEntries(
-      new Intl.DateTimeFormat('en-IN', {
-        timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
-        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, hourCycle: 'h23',
-      }).formatToParts(endDate).map(p => [p.type, p.value])
-    );
-    const endISO = `${endISTparts.year}-${endISTparts.month}-${endISTparts.day}T${endISTparts.hour}:${endISTparts.minute}:${endISTparts.second}`;
+    const endISO = istWallClock(new Date(new Date(startISO + '+05:30').getTime() + durationMins * 60000));
 
     const event = await calendar.events.insert({
       calendarId: 'primary',
@@ -183,7 +204,12 @@ router.post('/create-meet', async (req, res) => {
   } catch (err) {
     console.error('create-meet error:', err.message);
     if (err.code === 401 || err.status === 401) {
-      delete tokenStore[userId];
+      // Revoke stale tokens so the user gets a clean re-auth prompt
+      delete tokenCache[userId];
+      await prisma.user.update({
+        where: { id: userId },
+        data: { googleAccessToken: null, googleRefreshToken: null, googleTokenExpiry: null },
+      }).catch(() => {});
       return res.status(401).json({ error: 'Google session expired', needsAuth: true });
     }
     res.status(500).json({ error: err.message || 'Failed to create Google Meet' });

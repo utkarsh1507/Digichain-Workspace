@@ -22,6 +22,9 @@ model User {
   statusPreset  String   @default("working")
   statusMessage String?
   lastActiveAt  DateTime @default(now())
+  googleAccessToken  String?
+  googleRefreshToken String?
+  googleTokenExpiry  BigInt?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
