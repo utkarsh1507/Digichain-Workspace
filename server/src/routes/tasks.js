@@ -13,8 +13,7 @@ const include = {
 // GET /api/tasks
 router.get('/', auth, async (req, res) => {
   try {
-    const where = req.user.role === 'intern' ? { assigneeId: req.user.id } : {};
-    const tasks = await prisma.task.findMany({ where, include, orderBy: { createdAt: 'desc' } });
+    const tasks = await prisma.task.findMany({ include, orderBy: { createdAt: 'desc' } });
     const result = tasks.map(t => ({ ...t, tags: t.tags ? JSON.parse(t.tags) : [] }));
     res.json(result);
   } catch (err) {
@@ -41,9 +40,24 @@ router.post('/', auth, async (req, res) => {
 // PATCH /api/tasks/:id
 router.patch('/:id', auth, async (req, res) => {
   try {
-    const { tags, ...data } = req.body;
-    if (tags !== undefined) data.tags = JSON.stringify(tags);
-    const task = await prisma.task.update({ where: { id: req.params.id }, data, include });
+    const taskId = req.params.id;
+    const existing = await prisma.task.findUnique({ where: { id: taskId } });
+    if (!existing) return res.status(404).json({ error: 'Task not found' });
+
+    const keys = Object.keys(req.body || {});
+    const onlyStatusUpdate = keys.length === 1 && keys[0] === 'status';
+    if (!onlyStatusUpdate) {
+      return res.status(403).json({ error: 'Only the assignee can change task status' });
+    }
+    if (existing.assigneeId !== req.user.id) {
+      return res.status(403).json({ error: 'Only the assignee can change task status' });
+    }
+
+    const task = await prisma.task.update({
+      where: { id: taskId },
+      data: { status: req.body.status },
+      include,
+    });
     const payload = { ...task, tags: task.tags ? JSON.parse(task.tags) : [] };
     broadcast('task:update', payload);
     res.json(payload);
@@ -55,7 +69,7 @@ router.patch('/:id', auth, async (req, res) => {
 // DELETE /api/tasks/:id
 router.delete('/:id', auth, async (req, res) => {
   try {
-    if (req.user.role === 'intern') return res.status(403).json({ error: 'Forbidden' });
+    if (req.user.role !== 'founder') return res.status(403).json({ error: 'Only admin can delete tasks' });
     await prisma.task.delete({ where: { id: req.params.id } });
     broadcast('task:delete', { id: req.params.id });
     res.json({ ok: true });

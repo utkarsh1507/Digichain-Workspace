@@ -601,7 +601,6 @@ export function AppProvider({ children }) {
       es.addEventListener('task:new', (e) => {
         try {
           const task = JSON.parse(e.data);
-          if (state.currentUser.role === 'intern' && task.assigneeId !== state.currentUser.id) return;
           dispatch({ type: 'ADD_TASK', task });
         } catch {}
       });
@@ -609,10 +608,6 @@ export function AppProvider({ children }) {
       es.addEventListener('task:update', (e) => {
         try {
           const task = JSON.parse(e.data);
-          if (state.currentUser.role === 'intern' && task.assigneeId !== state.currentUser.id) {
-            dispatch({ type: 'REMOVE_TASK', id: task.id });
-            return;
-          }
           dispatch({ type: 'UPDATE_TASK', task });
         } catch {}
       });

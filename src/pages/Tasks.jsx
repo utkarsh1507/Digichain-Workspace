@@ -12,22 +12,22 @@ const PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
 export default function Tasks() {
   const { state, createTask, updateTask, deleteTask, addTaskComment } = useApp();
   const { currentUser, tasks, users } = state;
-  const isAdmin = ['founder', 'employee'].includes(currentUser?.role);
+  const canCreateTasks = ['founder', 'employee'].includes(currentUser?.role);
+  const canDeleteTasks = currentUser?.role === 'founder';
   const [filter, setFilter] = useState('All');
   const [selected, setSelected] = useState(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [comment, setComment] = useState('');
   const [form, setForm] = useState({ title: '', description: '', priority: 'Medium', dueDate: '', assigneeId: currentUser?.id || '', status: 'Pending', tags: '' });
 
-  const myTasks = currentUser?.role === 'intern'
-    ? tasks.filter(t => t.assigneeId === currentUser.id)
-    : tasks;
+  const visibleTasks = tasks;
 
-  const filtered = filter === 'All' ? myTasks : filter === 'Mine'
-    ? myTasks.filter(t => t.assigneeId === currentUser?.id)
-    : myTasks.filter(t => t.status === filter);
+  const filtered = filter === 'All' ? visibleTasks : filter === 'Mine'
+    ? visibleTasks.filter(t => t.assigneeId === currentUser?.id)
+    : visibleTasks.filter(t => t.status === filter);
 
   const sel = selected ? tasks.find(t => t.id === selected) : null;
+  const canUpdateSelectedStatus = sel?.assigneeId === currentUser?.id;
 
   async function handleCreate(e) {
     e.preventDefault();
@@ -63,7 +63,7 @@ export default function Tasks() {
           <Eyebrow>Tasks</Eyebrow>
           <h1 style={{ margin: '6px 0 0', fontSize: 28, fontWeight: 700, letterSpacing: '-0.018em' }}>Task Board</h1>
         </div>
-        {isAdmin && <Button variant="primary" icon={Plus} onClick={() => setCreateOpen(true)}>New Task</Button>}
+        {canCreateTasks && <Button variant="primary" icon={Plus} onClick={() => setCreateOpen(true)}>New Task</Button>}
       </div>
 
       {/* Filters */}
@@ -93,6 +93,7 @@ export default function Tasks() {
             : filtered.map(t => {
               const isSel = sel?.id === t.id;
               const assignee = users.find(u => u.id === t.assigneeId);
+              const canUpdateStatus = t.assigneeId === currentUser?.id;
               return (
                 <div key={t.id} onClick={() => setSelected(isSel ? null : t.id)}
                   style={{ display: 'grid', gridTemplateColumns: '24px 1fr 100px 110px 100px 28px', gap: 12, alignItems: 'center',
@@ -104,8 +105,13 @@ export default function Tasks() {
                     border: t.status === 'Completed' ? 'none' : '1.5px solid var(--border-3)',
                     background: t.status === 'Completed' ? 'var(--accent)' : 'transparent',
                     display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                    cursor: 'pointer' }}
-                    onClick={e => { e.stopPropagation(); handleStatusChange(t.id, t.status === 'Completed' ? 'Pending' : 'Completed'); }}>
+                    cursor: canUpdateStatus ? 'pointer' : 'not-allowed',
+                    opacity: canUpdateStatus ? 1 : 0.6 }}
+                    onClick={e => {
+                      e.stopPropagation();
+                      if (!canUpdateStatus) return;
+                      handleStatusChange(t.id, t.status === 'Completed' ? 'Pending' : 'Completed');
+                    }}>
                     {t.status === 'Completed' && <Check size={11} color="#fff" strokeWidth={3} />}
                   </div>
                   <div style={{ minWidth: 0 }}>
@@ -135,7 +141,7 @@ export default function Tasks() {
             <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--fg-3)' }}>{sel.id}</span>
               <div style={{ display: 'flex', gap: 4 }}>
-                {isAdmin && (
+                {canDeleteTasks && (
                   <IconBtn icon={Trash2} title="Delete" onClick={() => { deleteTask(sel.id); setSelected(null); }} />
                 )}
               </div>
@@ -151,10 +157,9 @@ export default function Tasks() {
               <div style={{ display: 'grid', gridTemplateColumns: '90px 1fr', rowGap: 10, fontSize: 13 }}>
                 <span style={{ color: 'var(--fg-3)' }}>Status</span>
                 <Select value={sel.status} onChange={e => handleStatusChange(sel.id, e.target.value)}
-                  options={STATUSES.map(s => ({ value: s, label: s }))} style={{ margin: 0 }} />
+                  options={STATUSES.map(s => ({ value: s, label: s }))} style={{ margin: 0 }} disabled={!canUpdateSelectedStatus} />
                 <span style={{ color: 'var(--fg-3)' }}>Priority</span>
-                <Select value={sel.priority} onChange={e => updateTask(sel.id, { priority: e.target.value })}
-                  options={PRIORITIES.map(p => ({ value: p, label: p }))} style={{ margin: 0 }} />
+                <span style={{ paddingTop: 6, fontWeight: 500 }}>{sel.priority}</span>
                 <span style={{ color: 'var(--fg-3)', paddingTop: 8 }}>Assignee</span>
                 {(() => {
                   const u = users.find(u => u.id === sel.assigneeId);
@@ -178,6 +183,11 @@ export default function Tasks() {
                   );
                 })()}
               </div>
+              {!canUpdateSelectedStatus && (
+                <div style={{ fontSize: 12, color: 'var(--fg-3)', background: 'var(--bg-1)', border: '1px solid var(--border-1)', borderRadius: 10, padding: '10px 12px' }}>
+                  Only the assigned person can change this task&apos;s status. Everyone else can view and comment.
+                </div>
+              )}
               <Divider />
               <div>
                 <Eyebrow>Description</Eyebrow>
