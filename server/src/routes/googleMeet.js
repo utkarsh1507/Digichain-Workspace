@@ -129,17 +129,35 @@ router.post('/create-meet', async (req, res) => {
 
     const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-    // Build start + end DateTimes in IST
-    const { hours, minutes } = parseTime(time || '10:00 AM');
+    // Build start + end DateTimes — always wall-clock strings without Z suffix
+    // so that timeZone: 'Asia/Kolkata' is applied unambiguously by Google.
     const durationMins = parseInt(duration) || 30;
+    let startISO;
+    if (date) {
+      const { hours, minutes } = parseTime(time || '10:00 AM');
+      startISO = `${date}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`;
+    } else {
+      // Instant meet — use current IST wall-clock time
+      const now = new Date();
+      const istParts = Object.fromEntries(
+        new Intl.DateTimeFormat('en-IN', {
+          timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, hourCycle: 'h23',
+        }).formatToParts(now).map(p => [p.type, p.value])
+      );
+      startISO = `${istParts.year}-${istParts.month}-${istParts.day}T${istParts.hour}:${istParts.minute}:${istParts.second}`;
+    }
 
-    const startISO = date
-      ? `${date}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:00`
-      : new Date().toISOString();
-
-    const startMs = new Date(startISO).getTime();
+    const startMs = new Date(startISO + '+05:30').getTime();
     const endMs   = startMs + durationMins * 60 * 1000;
-    const endISO  = new Date(endMs).toISOString().slice(0, 19);
+    const endDate = new Date(endMs);
+    const endISTparts = Object.fromEntries(
+      new Intl.DateTimeFormat('en-IN', {
+        timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false, hourCycle: 'h23',
+      }).formatToParts(endDate).map(p => [p.type, p.value])
+    );
+    const endISO = `${endISTparts.year}-${endISTparts.month}-${endISTparts.day}T${endISTparts.hour}:${endISTparts.minute}:${endISTparts.second}`;
 
     const event = await calendar.events.insert({
       calendarId: 'primary',
