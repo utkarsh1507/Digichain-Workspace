@@ -4,6 +4,16 @@ const auth = require('../middleware/auth');
 const { broadcast } = require('../lib/events');
 const prisma = new PrismaClient();
 const IST_TIME_ZONE = 'Asia/Kolkata';
+
+// In-memory founder ID cache — avoids a DB read on every sign-in/out broadcast
+let founderIds = null;
+async function getFounderIds() {
+  if (founderIds) return founderIds;
+  const founders = await prisma.user.findMany({ where: { role: 'founder' }, select: { id: true } });
+  founderIds = founders.map(u => u.id);
+  return founderIds;
+}
+function invalidateFounderCache() { founderIds = null; }
 const SIGN_WINDOW_START_MIN = 9 * 60;
 const SIGN_WINDOW_END_MIN = 19 * 60;
 
@@ -39,11 +49,8 @@ function ensureSignWindow(res) {
 }
 
 async function getAttendanceTargets(userId) {
-  const founders = await prisma.user.findMany({
-    where: { role: 'founder' },
-    select: { id: true },
-  });
-  return Array.from(new Set([userId, ...founders.map((user) => user.id)]));
+  const ids = await getFounderIds();
+  return Array.from(new Set([userId, ...ids]));
 }
 
 // GET /api/attendance — all (founder) or own
@@ -136,3 +143,4 @@ router.delete('/today', auth, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.invalidateFounderCache = invalidateFounderCache;

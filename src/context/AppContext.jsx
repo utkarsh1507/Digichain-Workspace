@@ -10,7 +10,7 @@ const AppContext = createContext(null);
 const IST_TIME_ZONE = 'Asia/Kolkata';
 const TOKEN_STORAGE_KEY = 'dw_token';
 const USER_STORAGE_KEY = 'dw_user';
-const PRESENCE_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+const PRESENCE_SYNC_INTERVAL_MS = 15 * 60 * 1000;
 const PRESENCE_FOCUS_MIN_GAP_MS = 2 * 60 * 1000;
 
 // ─── Reducer ──────────────────────────────────────────────────────────────────
@@ -379,16 +379,18 @@ export function AppProvider({ children }) {
   // ── Load all app data ────────────────────────────────────────────────────────
   const loadCoreAppData = useCallback(async (activeUser = null) => {
     try {
-      const [users, attendance, todayList, leaves, tasks, channels, unreadCounts] =
+      const [users, attendance, leaves, tasks, channels, unreadCounts] =
         await Promise.all([
           usersApi.list(),
           attendanceApi.list(),
-          attendanceApi.today(),
           leavesApi.list(),
           tasksApi.list(),
           messagesApi.listChannels(),
           messagesApi.getUnread().catch(() => ({})),
         ]);
+      // Derive today's record from the full list — avoids a separate API call
+      const todayStr = getIstDateString();
+      const todayList = attendance.filter(r => r.date === todayStr);
       dispatch({ type: 'SET_USERS', users });
       dispatch({ type: 'SET_ATTENDANCE', records: attendance });
       dispatch({ type: 'SET_TODAY', record: getTodayAttendanceRecord(todayList, activeUser?.id) });
@@ -953,10 +955,10 @@ export function AppProvider({ children }) {
     return user;
   }
   async function refreshPresence() {
-    const user = await usersApi.presence();
+    const result = await usersApi.presence();
     lastPresenceSyncRef.current = Date.now();
-    dispatch({ type: 'UPDATE_USER', user });
-    return user;
+    // Server returns { ok: true } when interval hasn't elapsed (no DB write)
+    if (result?.id) dispatch({ type: 'UPDATE_USER', user: result });
   }
 
   useEffect(() => {

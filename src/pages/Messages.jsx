@@ -79,7 +79,7 @@ export default function Messages() {
   const throttledMarkRead = useCallback((channelId) => {
     const now = Date.now();
     const last = markReadLastRef.current[channelId] ?? 0;
-    if (now - last < 10_000) return;
+    if (now - last < 30_000) return;
     markReadLastRef.current[channelId] = now;
     markChannelRead(channelId);
   }, [markChannelRead]);

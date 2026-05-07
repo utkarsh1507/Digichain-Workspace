@@ -1,5 +1,5 @@
 const router = require('express').Router();
-const { PrismaClient } = require('@prisma/client');
+const { PrismaClient, Prisma } = require('@prisma/client');
 const auth = require('../middleware/auth');
 const { uploadMessage: uploadFile } = require('../lib/cloudinary');
 const { broadcast } = require('../lib/events');
@@ -68,21 +68,25 @@ router.get('/channels/unread', auth, async (req, res) => {
     const all = await prisma.channel.findMany();
     const mine = all.filter(c => parseMemberIds(c.memberIds).includes(req.user.id));
 
-    const readRecords = await prisma.channelRead.findMany({ where: { userId: req.user.id } });
-    const readMap = {};
-    readRecords.forEach(r => { readMap[r.channelId] = r.lastReadAt; });
+    if (!mine.length) return res.json({});
+
+    const channelIds = mine.map(c => c.id);
+
+    // Single SQL query instead of N+2 separate Prisma calls
+    const rows = await prisma.$queryRaw(Prisma.sql`
+      SELECT m."channelId", COUNT(*)::int AS count
+      FROM "Message" m
+      LEFT JOIN "ChannelRead" cr
+        ON cr."channelId" = m."channelId" AND cr."userId" = ${req.user.id}
+      WHERE m."channelId" IN (${Prisma.join(channelIds)})
+        AND m."senderId" != ${req.user.id}
+        AND (cr."lastReadAt" IS NULL OR m."timestamp" > cr."lastReadAt")
+      GROUP BY m."channelId"
+    `);
 
     const counts = {};
-    await Promise.all(mine.map(async (ch) => {
-      const readAt = readMap[ch.id];
-      counts[ch.id] = await prisma.message.count({
-        where: {
-          channelId: ch.id,
-          senderId: { not: req.user.id },
-          ...(readAt ? { timestamp: { gt: readAt } } : {}),
-        },
-      });
-    }));
+    channelIds.forEach(id => { counts[id] = 0; });
+    rows.forEach(r => { counts[r.channelId] = Number(r.count); });
     res.json(counts);
   } catch (err) {
     console.error(err);

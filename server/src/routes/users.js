@@ -4,10 +4,11 @@ const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
 const { uploadAvatar } = require('../lib/cloudinary');
 const { broadcast } = require('../lib/events');
+const { invalidateFounderCache } = require('./attendance');
 const prisma = new PrismaClient();
 const PASSWORD_MIN_LENGTH = 10;
 const STATUS_PRESETS = new Set(['working', 'on-break', 'on-leave', 'busy', 'custom']);
-const PRESENCE_WRITE_INTERVAL_MS = 5 * 60 * 1000;
+const PRESENCE_WRITE_INTERVAL_MS = 15 * 60 * 1000;
 
 // In-memory last-write tracker — avoids a DB read on every presence ping
 const presenceLastWritten = {}; // userId → timestamp (ms)
@@ -94,6 +95,7 @@ router.post('/', auth, async (req, res) => {
       },
     });
     const { password, ...safeUser } = user;
+    invalidateFounderCache();
     broadcast('user:new', safeUser);
     res.json(safeUser);
   } catch (err) {
@@ -126,6 +128,7 @@ router.patch('/:id', auth, async (req, res) => {
     }
     const user = await prisma.user.update({ where: { id: req.params.id }, data });
     const { password: _, ...safeUser } = user;
+    if (data.role !== undefined) invalidateFounderCache();
     broadcast('user:update', safeUser);
     res.json(safeUser);
   } catch (err) {
@@ -178,6 +181,7 @@ router.delete('/:id', auth, async (req, res) => {
       prisma.channelRead.deleteMany({ where: { userId } }),
       prisma.user.delete({ where: { id: userId } }),
     ]);
+    invalidateFounderCache();
     broadcast('user:delete', { id: userId });
     res.json({ ok: true });
   } catch (err) {
