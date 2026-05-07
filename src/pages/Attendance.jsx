@@ -70,7 +70,7 @@ function ElapsedClock({ signIn }) {
   }, [signIn]);
   const fmt = (n) => String(n).padStart(2, '0');
   return (
-    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 52, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1 }}
+    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em', lineHeight: 1.1 }}
       className="text-gradient">
       {fmt(Math.floor(secs / 3600))}:{fmt(Math.floor((secs % 3600) / 60))}:{fmt(secs % 60)}
     </span>
@@ -157,7 +157,7 @@ export default function Attendance() {
                 {todaySession ? 'Active session' : todayRecord ? 'Session complete' : 'Not signed in'}
               </span>
             </div>
-            {todaySession ? <ElapsedClock signIn={todaySession.signIn} /> : <LiveClock />}
+            <LiveClock />
             <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>
               {todaySession
                 ? `Signed in at ${todaySession.signIn} · ${todaySession.location}`
@@ -167,6 +167,12 @@ export default function Attendance() {
                 ? 'Click "Sign in" to start tracking your hours.'
                 : 'Sign in and sign out are available from 9:00 AM to 7:00 PM IST.'}
             </div>
+            {todaySession && (
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 999, background: 'rgba(22,163,113,0.08)', width: 'fit-content' }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#0e7a52' }}>Worked today</span>
+                <ElapsedClock signIn={todaySession.signIn} />
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 10, alignItems: 'flex-end' }}>
             {!todayRecord && !todaySession && (

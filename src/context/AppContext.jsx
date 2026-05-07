@@ -352,7 +352,7 @@ export function AppProvider({ children }) {
   }
 
   // ── Load all app data ────────────────────────────────────────────────────────
-  const loadAppData = useCallback(async (activeUser = state.currentUser) => {
+  const loadAppData = useCallback(async (activeUser = null) => {
     try {
       const [users, attendance, todayList, leaves, tasks, channels, announcements, documents, meetings, unreadCounts] =
         await Promise.all([
@@ -384,7 +384,7 @@ export function AppProvider({ children }) {
     } finally {
       dispatch({ type: 'SET_LOADING', loading: false });
     }
-  }, [state.currentUser]);
+  }, []);
 
   // ── Session restore ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -633,7 +633,7 @@ export function AppProvider({ children }) {
       es.addEventListener('attendance:delete', (e) => {
         try {
           const { userId } = JSON.parse(e.data);
-          if (userId === activeUser?.id) dispatch({ type: 'RESET_TODAY' });
+          if (userId === state.currentUser?.id) dispatch({ type: 'RESET_TODAY' });
         } catch {}
       });
 
