@@ -3,7 +3,7 @@ import { Plus, Video, Calendar, Clock, Users, ExternalLink, Trash2, CheckCircle,
 import { useApp } from '../context/AppContext';
 import { Card, StatCard, Button, IconBtn, Pill, Eyebrow, Section, Modal, Input, Textarea, Avatar, AvatarStack, Empty, Divider, fmtDate } from '../components/ui';
 import { normalizeMeetLink, isGoogleMeetLink } from '../utils/meet';
-import { ensureGoogleConnected, createGoogleMeet, getGoogleStatus, disconnectGoogle } from '../utils/googleMeet';
+import { ensureGoogleConnected, openGoogleAuthPopup, createGoogleMeet, getGoogleStatus, disconnectGoogle } from '../utils/googleMeet';
 
 // ── Calendar picker ──────────────────────────────────────────────────────────
 const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -248,16 +248,32 @@ export default function Meetings() {
   async function handleGenerateMeetLink() {
     setGeneratingLink(true);
     try {
+      // Ensure connected — if server lost its cache (restart), re-auth automatically
       await ensureGoogleConnected();
       setGoogleConnected(true);
-      const { meetLink } = await createGoogleMeet({
-        title: form.title || 'Digichain Meeting',
-        description: form.description || '',
-        date: form.date || todayStr,
-        time: form.time,
-        duration: form.duration,
-      });
-      setForm(f => ({ ...f, meetLink }));
+      let result;
+      try {
+        result = await createGoogleMeet({
+          title: form.title || 'Digichain Meeting',
+          description: form.description || '',
+          date: form.date || todayStr,
+          time: form.time,
+          duration: form.duration,
+        });
+      } catch (err) {
+        if (err.needsAuth) {
+          // Server restarted and lost in-memory cache — re-auth then retry once
+          await openGoogleAuthPopup();
+          result = await createGoogleMeet({
+            title: form.title || 'Digichain Meeting',
+            description: form.description || '',
+            date: form.date || todayStr,
+            time: form.time,
+            duration: form.duration,
+          });
+        } else throw err;
+      }
+      setForm(f => ({ ...f, meetLink: result.meetLink }));
     } catch (err) {
       if (err.notConfigured) {
         alert('Google Meet is not configured on the server. Ask your admin to add GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI.');

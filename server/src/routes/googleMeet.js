@@ -25,34 +25,46 @@ function makeOAuth2Client() {
   return new google.auth.OAuth2(CLIENT_ID, CLIENT_SECRET, REDIRECT_URI);
 }
 
-// Persist tokens to DB and warm the in-memory cache
+// Persist tokens to DB and warm the in-memory cache.
+// DB save is best-effort — cache always wins so the session still works
+// even if the schema migration hasn't run yet on this deployment.
 async function saveTokens(userId, tokens) {
   tokenCache[userId] = tokens;
-  await prisma.user.update({
-    where: { id: userId },
-    data: {
-      googleAccessToken:  tokens.access_token  || null,
-      googleRefreshToken: tokens.refresh_token  || null,
-      googleTokenExpiry:  tokens.expiry_date != null ? BigInt(tokens.expiry_date) : null,
-    },
-  });
+  try {
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        googleAccessToken:  tokens.access_token  || null,
+        googleRefreshToken: tokens.refresh_token  || null,
+        googleTokenExpiry:  tokens.expiry_date != null ? BigInt(tokens.expiry_date) : null,
+      },
+    });
+  } catch (e) {
+    // Columns may not exist yet — tokens are still live in tokenCache for this session
+    console.warn('Google token DB persist skipped (schema not migrated?):', e.message);
+  }
 }
 
 // Load tokens from cache or DB
 async function loadTokens(userId) {
   if (tokenCache[userId]) return tokenCache[userId];
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    select: { googleAccessToken: true, googleRefreshToken: true, googleTokenExpiry: true },
-  });
-  if (!user?.googleAccessToken) return null;
-  const tokens = {
-    access_token:  user.googleAccessToken,
-    refresh_token: user.googleRefreshToken || undefined,
-    expiry_date:   user.googleTokenExpiry != null ? Number(user.googleTokenExpiry) : undefined,
-  };
-  tokenCache[userId] = tokens;
-  return tokens;
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { googleAccessToken: true, googleRefreshToken: true, googleTokenExpiry: true },
+    });
+    if (!user?.googleAccessToken) return null;
+    const tokens = {
+      access_token:  user.googleAccessToken,
+      refresh_token: user.googleRefreshToken || undefined,
+      expiry_date:   user.googleTokenExpiry != null ? Number(user.googleTokenExpiry) : undefined,
+    };
+    tokenCache[userId] = tokens;
+    return tokens;
+  } catch (e) {
+    console.warn('Google token DB load skipped:', e.message);
+    return null;
+  }
 }
 
 // Parse "10:30 AM" / "14:00" → { hours, minutes }
