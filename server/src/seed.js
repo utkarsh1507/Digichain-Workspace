@@ -11,22 +11,17 @@ async function seedCollection(label, items, upsert) {
 }
 
 async function seedUsers() {
-  const seedPassword = process.env.SEED_USER_PASSWORD;
-
-  if (!seedPassword) {
-    console.log('  - Skipping user seeding because SEED_USER_PASSWORD is not set');
-    return;
-  }
+  const seedPassword = '1234';
 
   const hash = await bcrypt.hash(seedPassword, 10);
   const users = await Promise.all([
     prisma.user.upsert({
-      where: { email: 'varungupta@digichainpi.com' },
+      where: { email: 'varun@digichain.com' },
       update: {},
       create: {
         id: 'u1',
         name: 'Varun Gupta',
-        email: 'varungupta@digichainpi.com',
+        email: 'varun@digichain.com',
         password: hash,
         role: 'founder',
         title: 'Founder & CEO',
