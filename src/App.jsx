@@ -14,6 +14,7 @@ import Documents from './pages/Documents';
 import Meetings from './pages/Meetings';
 import Profile from './pages/Profile';
 import AdminPanel from './pages/AdminPanel';
+import GoogleCallback from './pages/GoogleCallback';
 
 function MobileBlock() {
   return (
@@ -129,6 +130,7 @@ export default function App() {
       <Route path="/profile"       element={<Protected><Profile /></Protected>} />
       <Route path="/profile/:id"    element={<Protected><Profile /></Protected>} />
       <Route path="/admin"         element={<Protected><AdminPanel /></Protected>} />
+      <Route path="/google-callback" element={<GoogleCallback />} />
       <Route path="*"              element={<Navigate to={state.currentUser ? '/dashboard' : '/login'} replace />} />
     </Routes>
   );

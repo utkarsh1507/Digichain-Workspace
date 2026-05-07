@@ -4,7 +4,8 @@ import { Hash, Plus, Send, Paperclip, Video, Search, Users, X, File, Image, Chec
 import { useApp } from '../context/AppContext';
 import { Avatar, IconBtn, Button, Empty, Modal, Input, fmtTime } from '../components/ui';
 import { messagesApi } from '../api/index.js';
-import { extractMeetLink, generateMeetLink, normalizeMeetLink, stripMeetLinkFromText } from '../utils/meet';
+import { extractMeetLink, normalizeMeetLink, stripMeetLinkFromText } from '../utils/meet';
+import { ensureGoogleConnected, createGoogleMeet } from '../utils/googleMeet';
 import { getPresence, getStatusText, getUserSubtitle } from '../utils/presence';
 const URL_REGEX = /(https?:\/\/[^\s]+)/g;
 
@@ -245,12 +246,20 @@ export default function Messages() {
     if (active?.type !== 'dm' || startingMeet) return;
 
     const otherUser = getDMOtherUser(active);
-    const meetLink = generateMeetLink(`${active.id}-${Date.now()}`);
     const inviterName = currentUser?.name?.split(' ')[0] || 'Someone';
-    const inviteText = `${inviterName} started an instant video call.\nJoin here: ${meetLink}`;
 
     setStartingMeet(true);
     try {
+      const token = localStorage.getItem('dw_token');
+      await ensureGoogleConnected(currentUser.id);
+      const { meetLink } = await createGoogleMeet({
+        userId: currentUser.id,
+        title: `${inviterName} ↔ ${otherUser?.name?.split(' ')[0] || 'Call'}`,
+        description: 'Instant video call via Digichain Workspace',
+        token,
+      });
+
+      const inviteText = `${inviterName} started an instant video call.\nJoin here: ${meetLink}`;
       await sendMessage(active.id, inviteText);
       markChannelRead(active.id);
       addToast({
@@ -261,7 +270,11 @@ export default function Messages() {
       });
       window.open(meetLink, '_blank', 'noopener,noreferrer');
     } catch (err) {
-      alert(err.message);
+      if (err.notConfigured) {
+        addToast({ type: 'error', title: 'Google Meet not configured', body: 'Ask your admin to add Google API credentials to the server.' });
+      } else if (err.message !== 'Google sign-in was cancelled.') {
+        addToast({ type: 'error', title: 'Could not start meet', body: err.message });
+      }
     } finally {
       setStartingMeet(false);
     }

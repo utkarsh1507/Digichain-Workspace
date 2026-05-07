@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Plus, Video, Calendar, Clock, Users, ExternalLink, Trash2, CheckCircle, ChevronLeft, ChevronRight, ExternalLink as LinkIcon } from 'lucide-react';
+import { Plus, Video, Calendar, Clock, Users, ExternalLink, Trash2, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Card, StatCard, Button, IconBtn, Pill, Eyebrow, Section, Modal, Input, Select, Textarea, Avatar, AvatarStack, Empty, Divider, fmtDate } from '../components/ui';
 import { normalizeMeetLink, isGoogleMeetLink } from '../utils/meet';
+import { ensureGoogleConnected, createGoogleMeet } from '../utils/googleMeet';
 
 // ── Inline calendar picker ───────────────────────────────────────────────────
 const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -111,6 +112,7 @@ export default function Meetings() {
 
   const [tab, setTab] = useState('upcoming');
   const [createOpen, setCreateOpen] = useState(false);
+  const [generatingLink, setGeneratingLink] = useState(false);
   const [form, setForm] = useState({
     title: '', description: '', date: '', time: '10:00 AM', duration: '30 min',
     attendeeIds: currentUser?.id ? [currentUser.id] : [], meetLink: '',
@@ -128,13 +130,39 @@ export default function Meetings() {
   async function handleCreate(e) {
     e.preventDefault();
     if (!form.date) { alert('Please select a date.'); return; }
-    // Prevent past dates (extra guard beyond the calendar widget)
     if (form.date < todayStr) { alert('Cannot schedule a meeting in the past.'); return; }
     try {
       await createMeeting({ ...form, meetLink: form.meetLink || '' });
       setForm({ title: '', description: '', date: '', time: '10:00 AM', duration: '30 min', attendeeIds: [currentUser?.id], meetLink: '' });
       setCreateOpen(false);
     } catch (err) { alert(err.message); }
+  }
+
+  async function handleGenerateMeetLink() {
+    if (!currentUser?.id) return;
+    setGeneratingLink(true);
+    try {
+      const token = localStorage.getItem('dw_token');
+      await ensureGoogleConnected(currentUser.id);
+      const { meetLink } = await createGoogleMeet({
+        userId: currentUser.id,
+        title: form.title || 'Digichain Meeting',
+        description: form.description || '',
+        date: form.date || todayStr,
+        time: form.time,
+        duration: form.duration,
+        token,
+      });
+      setForm(f => ({ ...f, meetLink }));
+    } catch (err) {
+      if (err.notConfigured) {
+        alert('Google Meet is not configured on the server. Please ask your admin to add GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI environment variables.');
+      } else {
+        alert(err.message || 'Failed to generate Google Meet link.');
+      }
+    } finally {
+      setGeneratingLink(false);
+    }
   }
 
   function toggleAttendee(userId) {
@@ -214,30 +242,48 @@ export default function Meetings() {
           {/* Google Meet link section */}
           <div>
             <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', display: 'block', marginBottom: 6 }}>Google Meet link</span>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <input
-                value={form.meetLink}
-                onChange={e => setForm(f => ({ ...f, meetLink: e.target.value }))}
-                placeholder="https://meet.google.com/xxx-xxxx-xxx"
-                style={{ flex: 1, height: 36, borderRadius: 8, border: '1.5px solid var(--border-1)',
-                  padding: '0 10px', background: '#fff', color: 'var(--fg-1)',
-                  fontFamily: 'inherit', fontSize: 13, outline: 'none' }}
-              />
-              <a href="https://meet.google.com/new" target="_blank" rel="noopener noreferrer"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '0 14px', borderRadius: 8,
-                  background: '#1a73e8', color: '#fff', fontSize: 12, fontWeight: 600,
-                  textDecoration: 'none', whiteSpace: 'nowrap', height: 36 }}>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                  <path d="M15 4.5V12l4.5-3L24 12V3.75A1.5 1.5 0 0022.5 2.25H4.5A1.5 1.5 0 003 3.75V20.25A1.5 1.5 0 004.5 21.75H19.5A1.5 1.5 0 0021 20.25V15l-4.5 2.25L12 14.25V12" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            {form.meetLink ? (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 10,
+                background: 'rgba(26,115,232,0.07)', border: '1.5px solid rgba(26,115,232,0.25)' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
                   <rect x="0" y="4" width="14" height="12" rx="2" fill="#1a73e8"/>
                   <path d="M1 6l5.5 3.5L12 6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
+                  <path d="M14 9l5-3v12l-5-3V9z" fill="#1a73e8"/>
                 </svg>
-                Get Meet link
-              </a>
-            </div>
+                <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: '#1a73e8', wordBreak: 'break-all' }}>{form.meetLink}</span>
+                <button type="button" onClick={() => setForm(f => ({ ...f, meetLink: '' }))}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', fontSize: 18, lineHeight: 1, padding: '0 4px' }}>×</button>
+              </div>
+            ) : (
+              <button type="button" onClick={handleGenerateMeetLink} disabled={generatingLink}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 10,
+                  background: generatingLink ? 'var(--bg-2)' : '#1a73e8',
+                  color: generatingLink ? 'var(--fg-3)' : '#fff', fontSize: 13, fontWeight: 600,
+                  border: 'none', cursor: generatingLink ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
+                  width: '100%', justifyContent: 'center', transition: 'background 150ms' }}>
+                {generatingLink ? (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ animation: 'spin 1s linear infinite' }}>
+                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5" strokeDasharray="40" strokeDashoffset="10" strokeLinecap="round"/>
+                    </svg>
+                    Connecting to Google…
+                  </>
+                ) : (
+                  <>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                      <rect x="0" y="4" width="14" height="12" rx="2" fill="white" fillOpacity="0.9"/>
+                      <path d="M1 6l5.5 3.5L12 6" stroke="#1a73e8" strokeWidth="1.5" strokeLinecap="round"/>
+                      <path d="M14 9l5-3v12l-5-3V9z" fill="white" fillOpacity="0.9"/>
+                    </svg>
+                    Generate Google Meet link
+                  </>
+                )}
+              </button>
+            )}
             <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--fg-3)' }}>
-              Click "Get Meet link" → copy the URL from Google Meet → paste it here.
-              Leave blank to add a link later.
+              {form.meetLink
+                ? 'A unique Google Meet room will be shared with all attendees.'
+                : 'Creates a real Google Meet room. All attendees join the same room automatically.'}
             </p>
           </div>
 
