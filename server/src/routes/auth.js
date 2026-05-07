@@ -40,10 +40,7 @@ router.post('/login', async (req, res) => {
 // GET /api/auth/me
 router.get('/me', auth, async (req, res) => {
   try {
-    const user = await prisma.user.update({
-      where: { id: req.user.id },
-      data: { lastActiveAt: new Date() },
-    });
+    const user = await prisma.user.findUnique({ where: { id: req.user.id } });
     if (!user) return res.status(404).json({ error: 'Not found' });
     const { password, ...safeUser } = user;
     res.json(safeUser);

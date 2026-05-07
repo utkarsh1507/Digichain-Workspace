@@ -10,6 +10,8 @@ const AppContext = createContext(null);
 const IST_TIME_ZONE = 'Asia/Kolkata';
 const TOKEN_STORAGE_KEY = 'dw_token';
 const USER_STORAGE_KEY = 'dw_user';
+const PRESENCE_SYNC_INTERVAL_MS = 5 * 60 * 1000;
+const PRESENCE_FOCUS_MIN_GAP_MS = 2 * 60 * 1000;
 
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 const initialState = {
@@ -361,6 +363,8 @@ export function AppProvider({ children }) {
   const [toasts, setToasts] = useState([]);
   const prevUnreadRef = useRef({});
   const prevAnnouncementCountRef = useRef(0);
+  const hydratedRef = useRef(false);
+  const lastPresenceSyncRef = useRef(0);
 
   // ── Toast helpers ────────────────────────────────────────────────────────────
   function addToast(toast) {
@@ -373,9 +377,9 @@ export function AppProvider({ children }) {
   }
 
   // ── Load all app data ────────────────────────────────────────────────────────
-  const loadAppData = useCallback(async (activeUser = null) => {
+  const loadCoreAppData = useCallback(async (activeUser = null) => {
     try {
-      const [users, attendance, todayList, leaves, tasks, channels, announcements, documents, meetings, unreadCounts] =
+      const [users, attendance, todayList, leaves, tasks, channels, unreadCounts] =
         await Promise.all([
           usersApi.list(),
           attendanceApi.list(),
@@ -383,9 +387,6 @@ export function AppProvider({ children }) {
           leavesApi.list(),
           tasksApi.list(),
           messagesApi.listChannels(),
-          announcementsApi.list(),
-          documentsApi.list(),
-          meetingsApi.list(),
           messagesApi.getUnread().catch(() => ({})),
         ]);
       dispatch({ type: 'SET_USERS', users });
@@ -394,16 +395,28 @@ export function AppProvider({ children }) {
       dispatch({ type: 'SET_LEAVES', leaves });
       dispatch({ type: 'SET_TASKS', tasks });
       dispatch({ type: 'SET_CHANNELS', channels });
-      dispatch({ type: 'SET_ANNOUNCEMENTS', announcements });
-      dispatch({ type: 'SET_DOCUMENTS', documents });
-      dispatch({ type: 'SET_MEETINGS', meetings });
       dispatch({ type: 'SET_UNREAD_COUNTS', counts: unreadCounts });
       prevUnreadRef.current = unreadCounts;
-      prevAnnouncementCountRef.current = announcements.length;
     } catch (err) {
       console.error('Failed to load app data', err);
     } finally {
       dispatch({ type: 'SET_LOADING', loading: false });
+    }
+  }, []);
+
+  const loadSecondaryAppData = useCallback(async () => {
+    try {
+      const [announcements, documents, meetings] = await Promise.all([
+        announcementsApi.list(),
+        documentsApi.list(),
+        meetingsApi.list(),
+      ]);
+      dispatch({ type: 'SET_ANNOUNCEMENTS', announcements });
+      dispatch({ type: 'SET_DOCUMENTS', documents });
+      dispatch({ type: 'SET_MEETINGS', meetings });
+      prevAnnouncementCountRef.current = announcements.length;
+    } catch (err) {
+      console.error('Failed to load secondary app data', err);
     }
   }, []);
 
@@ -422,7 +435,7 @@ export function AppProvider({ children }) {
       .then(user => {
         persistSession({ user });
         dispatch({ type: 'SET_USER', user });
-        return loadAppData(user);
+        return loadCoreAppData(user);
       })
       .catch((err) => {
         if (err?.status === 401 || err?.status === 403) {
@@ -431,7 +444,19 @@ export function AppProvider({ children }) {
         }
         dispatch({ type: 'SET_LOADING', loading: false });
       });
-  }, [loadAppData]);
+  }, [loadCoreAppData]);
+
+  useEffect(() => {
+    if (!state.currentUser || state.loading || hydratedRef.current) return;
+    hydratedRef.current = true;
+    loadSecondaryAppData();
+  }, [state.currentUser?.id, state.loading, loadSecondaryAppData]);
+
+  useEffect(() => {
+    if (!state.currentUser) {
+      hydratedRef.current = false;
+    }
+  }, [state.currentUser?.id]);
 
   // ── Real-time via Server-Sent Events ─────────────────────────────────────────
   // `activeChannelIdRef` is set by the Messages page so we know which channel
@@ -742,7 +767,9 @@ export function AppProvider({ children }) {
       persistSession({ token, user });
       dispatch({ type: 'SET_USER', user });
       dispatch({ type: 'SET_LOADING', loading: true });
-      await loadAppData(user);
+      await loadCoreAppData(user);
+      hydratedRef.current = true;
+      loadSecondaryAppData();
     } catch (err) {
       dispatch({ type: 'LOGIN_ERROR', message: err.message || 'Invalid email or password.' });
     }
@@ -927,6 +954,7 @@ export function AppProvider({ children }) {
   }
   async function refreshPresence() {
     const user = await usersApi.presence();
+    lastPresenceSyncRef.current = Date.now();
     dispatch({ type: 'UPDATE_USER', user });
     return user;
   }
@@ -934,19 +962,25 @@ export function AppProvider({ children }) {
   useEffect(() => {
     if (!state.currentUser) return;
     let stopped = false;
-    const beat = () => {
+    const beat = (force = false) => {
       if (stopped || document.visibilityState === 'hidden') return;
+      if (!force && (Date.now() - lastPresenceSyncRef.current) < PRESENCE_SYNC_INTERVAL_MS) return;
+      if (force && (Date.now() - lastPresenceSyncRef.current) < PRESENCE_FOCUS_MIN_GAP_MS) return;
       refreshPresence().catch(() => {});
     };
     beat();
-    const interval = setInterval(beat, 60 * 1000);
-    window.addEventListener('focus', beat);
-    document.addEventListener('visibilitychange', beat);
+    const interval = setInterval(() => beat(), PRESENCE_SYNC_INTERVAL_MS);
+    const handleFocus = () => beat(true);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') beat(true);
+    };
+    window.addEventListener('focus', handleFocus);
+    document.addEventListener('visibilitychange', handleVisibilityChange);
     return () => {
       stopped = true;
       clearInterval(interval);
-      window.removeEventListener('focus', beat);
-      document.removeEventListener('visibilitychange', beat);
+      window.removeEventListener('focus', handleFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [state.currentUser?.id]); // eslint-disable-line
 

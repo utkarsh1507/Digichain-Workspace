@@ -7,8 +7,8 @@ export const STATUS_PRESETS = [
 ];
 
 const STATUS_BY_VALUE = Object.fromEntries(STATUS_PRESETS.map((status) => [status.value, status]));
-const ONLINE_MS = 90 * 1000;
-const AWAY_MS = 10 * 60 * 1000;
+const ONLINE_MS = 6 * 60 * 1000;
+const AWAY_MS = 30 * 60 * 1000;
 
 export function getStatusMeta(value) {
   return STATUS_BY_VALUE[value] || STATUS_BY_VALUE.working;

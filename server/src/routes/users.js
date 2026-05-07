@@ -7,6 +7,7 @@ const { broadcast } = require('../lib/events');
 const prisma = new PrismaClient();
 const PASSWORD_MIN_LENGTH = 10;
 const STATUS_PRESETS = new Set(['working', 'on-break', 'on-leave', 'busy', 'custom']);
+const PRESENCE_WRITE_INTERVAL_MS = 5 * 60 * 1000;
 
 function normalizeEmail(email) {
   return typeof email === 'string' ? email.trim().toLowerCase() : '';
@@ -35,12 +36,22 @@ router.get('/', auth, async (req, res) => {
 // POST /api/users/presence - refresh own activity timestamp
 router.post('/presence', auth, async (req, res) => {
   try {
-    const user = await prisma.user.update({
-      where: { id: req.user.id },
-      data: { lastActiveAt: new Date() },
-    });
+    const existing = await prisma.user.findUnique({ where: { id: req.user.id } });
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+
+    const now = new Date();
+    const lastActiveMs = existing.lastActiveAt ? new Date(existing.lastActiveAt).getTime() : 0;
+    const shouldWrite = !lastActiveMs || (now.getTime() - lastActiveMs) >= PRESENCE_WRITE_INTERVAL_MS;
+
+    const user = shouldWrite
+      ? await prisma.user.update({
+          where: { id: req.user.id },
+          data: { lastActiveAt: now },
+        })
+      : existing;
+
     const { password, ...safeUser } = user;
-    broadcast('user:update', safeUser);
+    if (shouldWrite) broadcast('user:update', safeUser);
     res.json(safeUser);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });

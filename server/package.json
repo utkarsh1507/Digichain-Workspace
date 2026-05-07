@@ -9,7 +9,9 @@
     "db:push": "prisma db push",
     "db:seed": "node src/seed.js",
     "db:studio": "prisma studio",
-    "setup": "npm install && npx prisma db push && node src/seed.js"
+    "setup": "npm install && npx prisma db push && node src/seed.js",
+    "db:backup": "powershell -ExecutionPolicy Bypass -File scripts/backup-postgres.ps1",
+    "db:restore": "powershell -ExecutionPolicy Bypass -File scripts/restore-postgres.ps1"
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
