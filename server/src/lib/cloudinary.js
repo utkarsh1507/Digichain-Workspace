@@ -38,6 +38,9 @@ const messageStorage = new CloudinaryStorage({
   params: (req, file) => ({
     folder: 'digichain/messages',
     resource_type: file.mimetype.startsWith('image/') ? 'image' : 'raw',
+    public_id: file.mimetype.startsWith('image/')
+      ? undefined
+      : `${Date.now()}-${file.originalname.replace(/\s+/g, '_')}`,
   }),
 });
 
