@@ -1,35 +1,31 @@
 import { useState } from 'react';
 import { Plus, Video, Calendar, Clock, Users, ExternalLink, Trash2, CheckCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useApp } from '../context/AppContext';
-import { Card, StatCard, Button, IconBtn, Pill, Eyebrow, Section, Modal, Input, Select, Textarea, Avatar, AvatarStack, Empty, Divider, fmtDate } from '../components/ui';
+import { Card, StatCard, Button, IconBtn, Pill, Eyebrow, Section, Modal, Input, Textarea, Avatar, AvatarStack, Empty, Divider, fmtDate } from '../components/ui';
 import { normalizeMeetLink, isGoogleMeetLink } from '../utils/meet';
 import { ensureGoogleConnected, createGoogleMeet } from '../utils/googleMeet';
 
-// ── Inline calendar picker ───────────────────────────────────────────────────
+// ── Calendar picker ──────────────────────────────────────────────────────────
 const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 function CalendarPicker({ value, onChange, minDate }) {
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const min = minDate ? new Date(minDate + 'T00:00:00') : today;
-
   const selected = value ? new Date(value + 'T00:00:00') : null;
   const initial = selected && selected >= min ? selected : (min > today ? min : today);
-
   const [viewYear, setViewYear] = useState(initial.getFullYear());
   const [viewMonth, setViewMonth] = useState(initial.getMonth());
+  const [hovered, setHovered] = useState(null);
 
   const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
   const firstWeekday = new Date(viewYear, viewMonth, 1).getDay();
 
   function selectDay(day) {
-    const d = new Date(viewYear, viewMonth, day);
-    d.setHours(0, 0, 0, 0);
+    const d = new Date(viewYear, viewMonth, day); d.setHours(0, 0, 0, 0);
     if (d < min) return;
-    const iso = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    onChange(iso);
+    onChange(`${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`);
   }
-
   function prevMonth() {
     if (viewMonth === 0) { setViewMonth(11); setViewYear(y => y - 1); }
     else setViewMonth(m => m - 1);
@@ -44,49 +40,76 @@ function CalendarPicker({ value, onChange, minDate }) {
   for (let d = 1; d <= daysInMonth; d++) cells.push(d);
 
   return (
-    <div style={{ background: 'var(--bg-1)', borderRadius: 12, padding: '12px 14px', border: '1px solid var(--border-1)' }}>
+    <div style={{ background: 'var(--bg-1)', borderRadius: 14, padding: '14px 16px', border: '1.5px solid var(--border-1)' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <button onClick={prevMonth} type="button"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-2)', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center' }}>
-          <ChevronLeft size={16} />
+          style={{ background: 'var(--bg-2)', border: 'none', cursor: 'pointer', color: 'var(--fg-2)',
+            width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'background 120ms' }}
+          onMouseEnter={e => e.currentTarget.style.background = 'var(--border-1)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-2)'}>
+          <ChevronLeft size={15} />
         </button>
-        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--fg-1)' }}>
-          {MONTHS[viewMonth]} {viewYear}
-        </span>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--fg-1)' }}>{MONTHS[viewMonth]}</div>
+          <div style={{ fontSize: 11, color: 'var(--fg-3)', fontWeight: 500 }}>{viewYear}</div>
+        </div>
         <button onClick={nextMonth} type="button"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-2)', padding: 4, borderRadius: 6, display: 'flex', alignItems: 'center' }}>
-          <ChevronRight size={16} />
+          style={{ background: 'var(--bg-2)', border: 'none', cursor: 'pointer', color: 'var(--fg-2)',
+            width: 28, height: 28, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'background 120ms' }}
+          onMouseEnter={e => e.currentTarget.style.background = 'var(--border-1)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'var(--bg-2)'}>
+          <ChevronRight size={15} />
         </button>
       </div>
 
       {/* Day headers */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 4 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2, marginBottom: 6 }}>
         {DAYS.map(d => (
-          <span key={d} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700, color: 'var(--fg-3)', padding: '2px 0' }}>{d}</span>
+          <span key={d} style={{ textAlign: 'center', fontSize: 10, fontWeight: 700,
+            color: d === 'Su' || d === 'Sa' ? 'var(--fg-3)' : 'var(--fg-3)', padding: '2px 0',
+            letterSpacing: '0.04em' }}>{d}</span>
         ))}
       </div>
 
       {/* Day cells */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 2 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 3 }}>
         {cells.map((day, i) => {
           if (!day) return <span key={`e-${i}`} />;
           const date = new Date(viewYear, viewMonth, day); date.setHours(0, 0, 0, 0);
           const isPast = date < min;
           const isToday = date.getTime() === today.getTime();
           const isSel = selected && date.getTime() === selected.getTime();
+          const isHov = hovered === day && !isPast && !isSel;
+          const isWeekend = date.getDay() === 0 || date.getDay() === 6;
           return (
             <button key={day} type="button" onClick={() => selectDay(day)} disabled={isPast}
+              onMouseEnter={() => !isPast && setHovered(day)}
+              onMouseLeave={() => setHovered(null)}
               style={{
-                background: isSel ? 'var(--accent)' : isToday ? 'var(--accent-tint)' : 'transparent',
-                color: isSel ? '#fff' : isPast ? 'var(--border-2, #ccc)' : isToday ? 'var(--accent)' : 'var(--fg-1)',
-                border: isSel ? 'none' : isToday ? '1.5px solid var(--accent)' : 'none',
-                borderRadius: 7, padding: '6px 0', fontSize: 12,
-                fontWeight: isSel || isToday ? 700 : 400,
+                background: isSel
+                  ? 'var(--accent)'
+                  : isHov ? 'var(--bg-2)'
+                  : isToday ? 'rgba(var(--accent-rgb, 99,102,241), 0.1)'
+                  : 'transparent',
+                color: isSel ? '#fff'
+                  : isPast ? 'var(--border-2, #ccc)'
+                  : isToday ? 'var(--accent)'
+                  : isWeekend ? 'var(--fg-3)'
+                  : 'var(--fg-1)',
+                border: isSel ? 'none'
+                  : isToday ? '1.5px solid var(--accent)'
+                  : isHov ? '1.5px solid var(--border-1)'
+                  : '1.5px solid transparent',
+                borderRadius: 8, padding: '7px 0', fontSize: 12,
+                fontWeight: isSel || isToday ? 700 : isWeekend ? 400 : 500,
                 cursor: isPast ? 'not-allowed' : 'pointer',
-                opacity: isPast ? 0.35 : 1,
-                transition: 'background 100ms',
+                opacity: isPast ? 0.3 : 1,
+                transition: 'background 80ms, border-color 80ms, color 80ms',
                 fontFamily: 'inherit',
+                boxShadow: isSel ? '0 2px 8px rgba(99,102,241,0.35)' : 'none',
               }}>
               {day}
             </button>
@@ -94,13 +117,95 @@ function CalendarPicker({ value, onChange, minDate }) {
         })}
       </div>
 
-      {/* Selected date display */}
+      {/* Selected date label */}
       {selected && (
-        <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border-1)',
-          fontSize: 12, fontWeight: 600, color: 'var(--accent)', textAlign: 'center' }}>
+        <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px solid var(--border-1)',
+          fontSize: 12, fontWeight: 600, color: 'var(--accent)', textAlign: 'center',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <Calendar size={12} />
           {selected.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Time slot picker ─────────────────────────────────────────────────────────
+const MORNING_SLOTS = ['09:00 AM','09:30 AM','10:00 AM','10:30 AM','11:00 AM','11:30 AM'];
+const AFTERNOON_SLOTS = ['12:00 PM','12:30 PM','01:00 PM','01:30 PM','02:00 PM','02:30 PM','03:00 PM','03:30 PM','04:00 PM','04:30 PM','05:00 PM','05:30 PM','06:00 PM','06:30 PM'];
+
+function TimeSlotPicker({ value, onChange }) {
+  function Chip({ slot }) {
+    const isSel = value === slot;
+    return (
+      <button type="button" onClick={() => onChange(slot)}
+        style={{
+          padding: '5px 10px', borderRadius: 7, fontSize: 11, fontWeight: isSel ? 700 : 500,
+          border: isSel ? 'none' : '1.5px solid var(--border-1)',
+          background: isSel ? 'var(--accent)' : 'var(--bg-1)',
+          color: isSel ? '#fff' : 'var(--fg-2)',
+          cursor: 'pointer', fontFamily: 'var(--font-mono, monospace)',
+          transition: 'all 100ms', letterSpacing: '0.01em',
+          boxShadow: isSel ? '0 2px 6px rgba(99,102,241,0.3)' : 'none',
+        }}
+        onMouseEnter={e => { if (!isSel) { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; } }}
+        onMouseLeave={e => { if (!isSel) { e.currentTarget.style.borderColor = 'var(--border-1)'; e.currentTarget.style.color = 'var(--fg-2)'; } }}>
+        {slot}
+      </button>
+    );
+  }
+  return (
+    <div style={{ background: 'var(--bg-1)', borderRadius: 14, padding: '12px 14px', border: '1.5px solid var(--border-1)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase',
+          color: 'var(--fg-3)', marginBottom: 6 }}>Morning</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+          {MORNING_SLOTS.map(s => <Chip key={s} slot={s} />)}
+        </div>
+      </div>
+      <div>
+        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase',
+          color: 'var(--fg-3)', marginBottom: 6 }}>Afternoon</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+          {AFTERNOON_SLOTS.map(s => <Chip key={s} slot={s} />)}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Duration picker ──────────────────────────────────────────────────────────
+const DURATION_OPTIONS = [
+  { value: '15 min', label: '15m' },
+  { value: '30 min', label: '30m' },
+  { value: '45 min', label: '45m' },
+  { value: '60 min', label: '1h' },
+  { value: '90 min', label: '1.5h' },
+  { value: '120 min', label: '2h' },
+];
+
+function DurationPicker({ value, onChange }) {
+  return (
+    <div style={{ display: 'flex', gap: 6 }}>
+      {DURATION_OPTIONS.map(({ value: v, label }) => {
+        const isSel = value === v;
+        return (
+          <button key={v} type="button" onClick={() => onChange(v)}
+            style={{
+              flex: 1, padding: '8px 0', borderRadius: 8, fontSize: 12, fontWeight: isSel ? 700 : 500,
+              border: isSel ? 'none' : '1.5px solid var(--border-1)',
+              background: isSel ? 'var(--accent)' : 'var(--bg-1)',
+              color: isSel ? '#fff' : 'var(--fg-2)',
+              cursor: 'pointer', fontFamily: 'inherit',
+              transition: 'all 100ms',
+              boxShadow: isSel ? '0 2px 6px rgba(99,102,241,0.3)' : 'none',
+            }}
+            onMouseEnter={e => { if (!isSel) { e.currentTarget.style.borderColor = 'var(--accent)'; e.currentTarget.style.color = 'var(--accent)'; } }}
+            onMouseLeave={e => { if (!isSel) { e.currentTarget.style.borderColor = 'var(--border-1)'; e.currentTarget.style.color = 'var(--fg-2)'; } }}>
+            {label}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -131,8 +236,9 @@ export default function Meetings() {
     e.preventDefault();
     if (!form.date) { alert('Please select a date.'); return; }
     if (form.date < todayStr) { alert('Cannot schedule a meeting in the past.'); return; }
+    if (!form.meetLink) { alert('Please generate a Google Meet link before scheduling.'); return; }
     try {
-      await createMeeting({ ...form, meetLink: form.meetLink || '' });
+      await createMeeting({ ...form, meetLink: form.meetLink });
       setForm({ title: '', description: '', date: '', time: '10:00 AM', duration: '30 min', attendeeIds: [currentUser?.id], meetLink: '' });
       setCreateOpen(false);
     } catch (err) { alert(err.message); }
@@ -232,11 +338,14 @@ export default function Meetings() {
             <CalendarPicker value={form.date} onChange={date => setForm(f => ({ ...f, date }))} minDate={todayStr} />
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-            <Select label="Time" value={form.time} onChange={e => setForm(f => ({ ...f, time: e.target.value }))}
-              options={['09:00 AM','09:30 AM','10:00 AM','10:30 AM','11:00 AM','11:30 AM','12:00 PM','01:00 PM','01:30 PM','02:00 PM','02:30 PM','03:00 PM','03:30 PM','04:00 PM','04:30 PM','05:00 PM','05:30 PM','06:00 PM'].map(t => ({ value: t, label: t }))} />
-            <Select label="Duration" value={form.duration} onChange={e => setForm(f => ({ ...f, duration: e.target.value }))}
-              options={['15 min','30 min','45 min','60 min','90 min','120 min'].map(d => ({ value: d, label: d }))} />
+          <div>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', display: 'block', marginBottom: 8 }}>Time</span>
+            <TimeSlotPicker value={form.time} onChange={time => setForm(f => ({ ...f, time }))} />
+          </div>
+
+          <div>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', display: 'block', marginBottom: 8 }}>Duration</span>
+            <DurationPicker value={form.duration} onChange={duration => setForm(f => ({ ...f, duration }))} />
           </div>
 
           {/* Google Meet link section */}
@@ -305,9 +414,17 @@ export default function Meetings() {
             </div>
           </div>
 
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
+            {!form.meetLink && (
+              <span style={{ fontSize: 11, color: '#e07a2f', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="#e07a2f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Generate a Meet link first
+              </span>
+            )}
             <Button type="button" variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button type="submit" variant="primary" icon={Calendar}>Schedule</Button>
+            <Button type="submit" variant="primary" icon={Calendar} disabled={!form.meetLink}>Schedule</Button>
           </div>
         </form>
       </Modal>
