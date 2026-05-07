@@ -50,8 +50,35 @@ function LiveClock() {
   );
 }
 
+function ElapsedClock({ signIn }) {
+  const [secs, setSecs] = useState(0);
+  useEffect(() => {
+    function calc() {
+      const [ih, im] = signIn.split(':').map(Number);
+      const parts = Object.fromEntries(
+        new Intl.DateTimeFormat('en-IN', {
+          timeZone: 'Asia/Kolkata', hour: '2-digit', minute: '2-digit', second: '2-digit',
+          hour12: false, hourCycle: 'h23',
+        }).formatToParts(new Date()).map((p) => [p.type, p.value])
+      );
+      const nowSecs = Number(parts.hour) * 3600 + Number(parts.minute) * 60 + Number(parts.second);
+      return Math.max(0, nowSecs - (ih * 3600 + im * 60));
+    }
+    setSecs(calc());
+    const t = setInterval(() => setSecs(calc()), 1000);
+    return () => clearInterval(t);
+  }, [signIn]);
+  const fmt = (n) => String(n).padStart(2, '0');
+  return (
+    <span style={{ fontFamily: 'var(--font-mono)', fontSize: 52, fontWeight: 700, letterSpacing: '-0.03em', lineHeight: 1 }}
+      className="text-gradient">
+      {fmt(Math.floor(secs / 3600))}:{fmt(Math.floor((secs % 3600) / 60))}:{fmt(secs % 60)}
+    </span>
+  );
+}
+
 export default function Attendance() {
-  const { state, signIn, signOut } = useApp();
+  const { state, signIn, signOut, resetTodayAttendance } = useApp();
   const { currentUser, attendance, todayAttendance, users } = state;
   const isFounder = currentUser?.role === 'founder';
   const [tab, setTab] = useState(isFounder ? 'team' : 'mine');
@@ -96,6 +123,12 @@ export default function Attendance() {
     try { await signOut(); } catch (e) { alert(e.message); }
     setBusy(false);
   }
+  async function handleReset() {
+    if (!window.confirm('Clear today\'s attendance record? You will be able to sign in again.')) return;
+    setBusy(true);
+    try { await resetTodayAttendance(); } catch (e) { alert(e.message); }
+    setBusy(false);
+  }
 
   const teamToday = users.map(u => {
     const rec = attendance.find(a => a.userId === u.id && a.date === today);
@@ -124,7 +157,7 @@ export default function Attendance() {
                 {todaySession ? 'Active session' : todayRecord ? 'Session complete' : 'Not signed in'}
               </span>
             </div>
-            <LiveClock />
+            {todaySession ? <ElapsedClock signIn={todaySession.signIn} /> : <LiveClock />}
             <div style={{ fontSize: 13, color: 'var(--fg-3)' }}>
               {todaySession
                 ? `Signed in at ${todaySession.signIn} · ${todaySession.location}`
@@ -155,6 +188,13 @@ export default function Attendance() {
             <span style={{ fontSize: 11, color: 'var(--fg-3)', display: 'flex', alignItems: 'center', gap: 4 }}>
               <MapPin size={11} />Office, Noida · 192.168.x.x
             </span>
+            {todayRecord && (
+              <button onClick={handleReset} disabled={busy}
+                style={{ fontSize: 11, color: '#e05c5c', background: 'none', border: 'none', cursor: 'pointer',
+                  padding: '2px 0', fontFamily: 'inherit', opacity: busy ? 0.5 : 1 }}>
+                Reset today
+              </button>
+            )}
           </div>
         </div>
       </Card>

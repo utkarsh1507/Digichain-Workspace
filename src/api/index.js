@@ -65,6 +65,7 @@ export const attendanceApi = {
   today: () => req('GET', '/attendance/today'),
   signIn: (location) => req('POST', '/attendance/signin', { location }),
   signOut: () => req('POST', '/attendance/signout'),
+  resetToday: () => req('DELETE', '/attendance/today'),
 };
 
 // ── Leaves ────────────────────────────────────────────────────────────────────

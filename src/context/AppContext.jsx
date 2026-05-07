@@ -236,6 +236,16 @@ function reducer(state, action) {
         attendance: upsertAttendanceRecord(state.attendance, updated),
       };
     }
+    case 'RESET_TODAY': {
+      const today = getIstDateString();
+      return {
+        ...state,
+        todayAttendance: null,
+        attendance: state.attendance.filter(
+          (r) => !(r.userId === state.currentUser?.id && r.date === today)
+        ),
+      };
+    }
     case 'UPSERT_ATTENDANCE': {
       const today = getIstDateString();
       const isTodayForCurrentUser =
@@ -620,6 +630,13 @@ export function AppProvider({ children }) {
         } catch {}
       });
 
+      es.addEventListener('attendance:delete', (e) => {
+        try {
+          const { userId } = JSON.parse(e.data);
+          if (userId === activeUser?.id) dispatch({ type: 'RESET_TODAY' });
+        } catch {}
+      });
+
       es.addEventListener('user:new', (e) => {
         try {
           const user = JSON.parse(e.data);
@@ -722,6 +739,10 @@ export function AppProvider({ children }) {
     const record = await attendanceApi.signOut();
     dispatch({ type: 'SIGN_OUT', record });
     return record;
+  }
+  async function resetTodayAttendance() {
+    await attendanceApi.resetToday();
+    dispatch({ type: 'RESET_TODAY' });
   }
 
   // ── Leaves ───────────────────────────────────────────────────────────────────
@@ -914,7 +935,7 @@ export function AppProvider({ children }) {
     setActiveChannel,
     // actions
     login, logout,
-    signIn, signOut,
+    signIn, signOut, resetTodayAttendance,
     applyLeave, updateLeaveStatus, deleteLeave,
     createTask, updateTask, deleteTask, addTaskComment,
     loadMessages, sendMessage, sendFile, reactToMessage, deleteMessage, ensureDm, createChannel, deleteChannel, markChannelRead,
