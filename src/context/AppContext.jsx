@@ -8,6 +8,8 @@ import { notify } from '../utils/notifications.js';
 
 const AppContext = createContext(null);
 const IST_TIME_ZONE = 'Asia/Kolkata';
+const TOKEN_STORAGE_KEY = 'dw_token';
+const USER_STORAGE_KEY = 'dw_user';
 
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 const initialState = {
@@ -39,6 +41,25 @@ function getIstDateString(date = new Date()) {
     }).formatToParts(date).map((part) => [part.type, part.value])
   );
   return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function readStoredUser() {
+  try {
+    const raw = localStorage.getItem(USER_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function persistSession({ token, user }) {
+  if (token) localStorage.setItem(TOKEN_STORAGE_KEY, token);
+  if (user) localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+}
+
+function clearStoredSession() {
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  localStorage.removeItem(USER_STORAGE_KEY);
 }
 
 function getTodayAttendanceRecord(records, userId) {
@@ -388,18 +409,26 @@ export function AppProvider({ children }) {
 
   // ── Session restore ──────────────────────────────────────────────────────────
   useEffect(() => {
-    const token = localStorage.getItem('dw_token');
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
     if (!token) {
       dispatch({ type: 'SET_LOADING', loading: false });
       return;
     }
+    const storedUser = readStoredUser();
+    if (storedUser) {
+      dispatch({ type: 'SET_USER', user: storedUser });
+    }
     authApi.me()
       .then(user => {
+        persistSession({ user });
         dispatch({ type: 'SET_USER', user });
         return loadAppData(user);
       })
-      .catch(() => {
-        localStorage.removeItem('dw_token');
+      .catch((err) => {
+        if (err?.status === 401 || err?.status === 403) {
+          clearStoredSession();
+          dispatch({ type: 'SET_USER', user: null });
+        }
         dispatch({ type: 'SET_LOADING', loading: false });
       });
   }, [loadAppData]);
@@ -413,7 +442,7 @@ export function AppProvider({ children }) {
 
   useEffect(() => {
     if (!state.currentUser) return;
-    const token = localStorage.getItem('dw_token');
+    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
     if (!token) return;
 
     let es = null;
@@ -715,7 +744,7 @@ export function AppProvider({ children }) {
     dispatch({ type: 'LOGIN_ERROR_CLEAR' });
     try {
       const { token, user } = await authApi.login(email, password);
-      localStorage.setItem('dw_token', token);
+      persistSession({ token, user });
       dispatch({ type: 'SET_USER', user });
       dispatch({ type: 'SET_LOADING', loading: true });
       await loadAppData(user);
@@ -725,7 +754,7 @@ export function AppProvider({ children }) {
   }
 
   function logout() {
-    localStorage.removeItem('dw_token');
+    clearStoredSession();
     dispatch({ type: 'LOGOUT' });
   }
 

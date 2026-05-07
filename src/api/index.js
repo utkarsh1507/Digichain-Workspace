@@ -14,6 +14,14 @@ const BASE = normalizeApiBase(
 
 export const API_BASE = BASE;
 
+class ApiError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+  }
+}
+
 function getToken() {
   return localStorage.getItem('dw_token');
 }
@@ -33,7 +41,7 @@ async function req(method, path, body, isFormData = false) {
   if (!res.ok) {
     let msg = 'Request failed';
     try { const j = await res.json(); msg = j.error || msg; } catch {}
-    throw new Error(msg);
+    throw new ApiError(msg, res.status);
   }
   return res.json();
 }
