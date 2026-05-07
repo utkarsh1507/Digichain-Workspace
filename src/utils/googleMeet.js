@@ -1,21 +1,36 @@
 import { API_BASE } from '../api/index.js';
 
-// Derive the server base (strips /api suffix) for redirect URLs
-function serverBase() {
-  return API_BASE.replace(/\/api$/, '');
+function token() {
+  return localStorage.getItem('dw_token');
 }
 
-export async function getGoogleStatus(userId) {
-  const res = await fetch(`${API_BASE}/google/status?userId=${encodeURIComponent(userId)}`);
+function authHeaders() {
+  return { 'Content-Type': 'application/json', Authorization: `Bearer ${token()}` };
+}
+
+export async function getGoogleStatus() {
+  const res = await fetch(`${API_BASE}/google/status`, { headers: authHeaders() });
   if (!res.ok) return { configured: false, connected: false };
   return res.json();
 }
 
-// Opens the OAuth popup and returns a promise that resolves when the flow completes.
-export function openGoogleAuthPopup(userId) {
+export async function disconnectGoogle() {
+  const res = await fetch(`${API_BASE}/google/disconnect`, {
+    method: 'DELETE',
+    headers: authHeaders(),
+  });
+  if (!res.ok) throw new Error('Failed to disconnect Google account');
+}
+
+// Opens the OAuth popup. The server reads the user from the JWT,
+// so no userId is passed in the URL (prevents cross-user token hijacking).
+export function openGoogleAuthPopup() {
   return new Promise((resolve, reject) => {
-    const url = `${API_BASE}/google/auth?userId=${encodeURIComponent(userId)}`;
-    const popup = window.open(url, 'google-oauth', 'width=520,height=640,left=200,top=100');
+    const url = `${API_BASE}/google/auth`;
+    // Append token as query param so the auth middleware on the server can read it
+    // (the popup is a plain browser redirect, not an XHR, so headers aren't available)
+    const fullUrl = `${url}?token=${encodeURIComponent(token())}`;
+    const popup = window.open(fullUrl, 'google-oauth', 'width=520,height=640,left=200,top=100');
 
     if (!popup) {
       reject(new Error('Popup blocked. Please allow popups for this site and try again.'));
@@ -30,7 +45,6 @@ export function openGoogleAuthPopup(userId) {
       else reject(new Error(e.data.error || 'Google auth failed'));
     }
 
-    // Fallback: detect if popup was closed without posting a message
     const timer = setInterval(() => {
       if (popup.closed) {
         cleanup();
@@ -47,27 +61,22 @@ export function openGoogleAuthPopup(userId) {
   });
 }
 
-// Ensure the user is authenticated with Google.
+// Ensure the current user is authenticated with Google.
 // Returns true if already connected, opens popup if not.
-// Throws if the user cancels or auth fails.
-export async function ensureGoogleConnected(userId) {
-  const status = await getGoogleStatus(userId);
+export async function ensureGoogleConnected() {
+  const status = await getGoogleStatus();
   if (!status.configured) throw new Error('Google Meet is not configured on the server. Ask your admin to add the Google API credentials.');
   if (status.connected) return true;
-  await openGoogleAuthPopup(userId);
+  await openGoogleAuthPopup();
   return true;
 }
 
-// Create a Google Meet via the server (creates a Google Calendar event).
-// Returns { meetLink, eventId }
-export async function createGoogleMeet({ userId, title, description, date, time, duration, token }) {
-  const headers = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-
+// Create a Google Meet. userId is read from the JWT on the server.
+export async function createGoogleMeet({ title, description, date, time, duration }) {
   const res = await fetch(`${API_BASE}/google/create-meet`, {
     method: 'POST',
-    headers,
-    body: JSON.stringify({ userId, title, description, date, time, duration }),
+    headers: authHeaders(),
+    body: JSON.stringify({ title, description, date, time, duration }),
   });
 
   const data = await res.json();

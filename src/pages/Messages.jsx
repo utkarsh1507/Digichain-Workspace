@@ -250,13 +250,10 @@ export default function Messages() {
 
     setStartingMeet(true);
     try {
-      const token = localStorage.getItem('dw_token');
-      await ensureGoogleConnected(currentUser.id);
+      await ensureGoogleConnected();
       const { meetLink } = await createGoogleMeet({
-        userId: currentUser.id,
         title: `${inviterName} ↔ ${otherUser?.name?.split(' ')[0] || 'Call'}`,
         description: 'Instant video call via Digichain Workspace',
-        token,
       });
 
       const inviteText = `${inviterName} started an instant video call.\nJoin here: ${meetLink}`;

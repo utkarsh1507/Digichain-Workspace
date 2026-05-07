@@ -1,5 +1,6 @@
 const router = require('express').Router();
 const { PrismaClient } = require('@prisma/client');
+const auth = require('../middleware/auth');
 
 const prisma = new PrismaClient();
 const CLIENT_ID     = process.env.GOOGLE_CLIENT_ID;
@@ -81,18 +82,19 @@ function pickClientUrl() {
   return urls.find(u => !u.includes('localhost') && !u.includes('127.0.0.1')) || urls[0];
 }
 
-// ── GET /api/google/auth?userId=xxx ─────────────────────────────────────────
-router.get('/auth', (req, res) => {
+// ── GET /api/google/auth ─────────────────────────────────────────────────────
+// Auth-protected: userId always comes from the JWT, never from query params.
+router.get('/auth', auth, (req, res) => {
   if (!isConfigured()) {
     return res.status(503).send('Google Meet API is not configured. Add GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI.');
   }
-  const { userId } = req.query;
+  const userId = req.user.id;
   const origin = req.get('Referer') ? new URL(req.get('Referer')).origin : pickClientUrl();
   const url = makeOAuth2Client().generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
     scope: ['https://www.googleapis.com/auth/calendar.events'],
-    state: JSON.stringify({ userId: userId || '', origin }),
+    state: JSON.stringify({ userId, origin }),
   });
   res.redirect(url);
 });
@@ -123,25 +125,31 @@ router.get('/callback', async (req, res) => {
   }
 });
 
-// ── GET /api/google/status?userId=xxx ───────────────────────────────────────
-router.get('/status', async (req, res) => {
-  const { userId } = req.query;
-  let connected = false;
-  if (userId) {
-    const tokens = await loadTokens(userId);
-    connected = !!tokens;
-  }
-  res.json({ configured: isConfigured(), connected });
+// ── GET /api/google/status ───────────────────────────────────────────────────
+router.get('/status', auth, async (req, res) => {
+  const tokens = await loadTokens(req.user.id);
+  res.json({ configured: isConfigured(), connected: !!tokens });
+});
+
+// ── DELETE /api/google/disconnect ────────────────────────────────────────────
+router.delete('/disconnect', auth, async (req, res) => {
+  const userId = req.user.id;
+  delete tokenCache[userId];
+  await prisma.user.update({
+    where: { id: userId },
+    data: { googleAccessToken: null, googleRefreshToken: null, googleTokenExpiry: null },
+  });
+  res.json({ ok: true });
 });
 
 // ── POST /api/google/create-meet ─────────────────────────────────────────────
-router.post('/create-meet', async (req, res) => {
+router.post('/create-meet', auth, async (req, res) => {
   if (!isConfigured()) {
     return res.status(503).json({ error: 'Google Meet API not configured', notConfigured: true });
   }
 
-  const { userId, title, description, date, time, duration } = req.body;
-  if (!userId) return res.status(400).json({ error: 'userId required' });
+  const userId = req.user.id;
+  const { title, description, date, time, duration } = req.body;
 
   const tokens = await loadTokens(userId);
   if (!tokens) {

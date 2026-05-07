@@ -3,7 +3,7 @@ import { Plus, Video, Calendar, Clock, Users, ExternalLink, Trash2, CheckCircle,
 import { useApp } from '../context/AppContext';
 import { Card, StatCard, Button, IconBtn, Pill, Eyebrow, Section, Modal, Input, Textarea, Avatar, AvatarStack, Empty, Divider, fmtDate } from '../components/ui';
 import { normalizeMeetLink, isGoogleMeetLink } from '../utils/meet';
-import { ensureGoogleConnected, createGoogleMeet } from '../utils/googleMeet';
+import { ensureGoogleConnected, createGoogleMeet, getGoogleStatus, disconnectGoogle } from '../utils/googleMeet';
 
 // ── Calendar picker ──────────────────────────────────────────────────────────
 const DAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
@@ -218,6 +218,7 @@ export default function Meetings() {
   const [tab, setTab] = useState('upcoming');
   const [createOpen, setCreateOpen] = useState(false);
   const [generatingLink, setGeneratingLink] = useState(false);
+  const [googleConnected, setGoogleConnected] = useState(null); // null=unknown, true/false
   const [form, setForm] = useState({
     title: '', description: '', date: '', time: '10:00 AM', duration: '30 min',
     attendeeIds: currentUser?.id ? [currentUser.id] : [], meetLink: '',
@@ -245,30 +246,35 @@ export default function Meetings() {
   }
 
   async function handleGenerateMeetLink() {
-    if (!currentUser?.id) return;
     setGeneratingLink(true);
     try {
-      const token = localStorage.getItem('dw_token');
-      await ensureGoogleConnected(currentUser.id);
+      await ensureGoogleConnected();
+      setGoogleConnected(true);
       const { meetLink } = await createGoogleMeet({
-        userId: currentUser.id,
         title: form.title || 'Digichain Meeting',
         description: form.description || '',
         date: form.date || todayStr,
         time: form.time,
         duration: form.duration,
-        token,
       });
       setForm(f => ({ ...f, meetLink }));
     } catch (err) {
       if (err.notConfigured) {
-        alert('Google Meet is not configured on the server. Please ask your admin to add GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI environment variables.');
-      } else {
+        alert('Google Meet is not configured on the server. Ask your admin to add GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI.');
+      } else if (err.message !== 'Google sign-in was cancelled.') {
         alert(err.message || 'Failed to generate Google Meet link.');
       }
     } finally {
       setGeneratingLink(false);
     }
+  }
+
+  async function handleDisconnectGoogle() {
+    if (!window.confirm('Disconnect your Google account from Digichain? You can reconnect anytime.')) return;
+    try {
+      await disconnectGoogle();
+      setGoogleConnected(false);
+    } catch { /* silent */ }
   }
 
   function toggleAttendee(userId) {
@@ -350,7 +356,18 @@ export default function Meetings() {
 
           {/* Google Meet link section */}
           <div>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', display: 'block', marginBottom: 6 }}>Google Meet link</span>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)' }}>Google Meet link</span>
+              {googleConnected && (
+                <button type="button" onClick={handleDisconnectGoogle}
+                  style={{ fontSize: 11, color: 'var(--fg-3)', background: 'none', border: 'none',
+                    cursor: 'pointer', fontFamily: 'inherit', padding: 0,
+                    display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a371', display: 'inline-block' }} />
+                  Google connected · <span style={{ color: '#e05c5c' }}>Disconnect</span>
+                </button>
+              )}
+            </div>
             {form.meetLink ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 10,
                 background: 'rgba(26,115,232,0.07)', border: '1.5px solid rgba(26,115,232,0.25)' }}>
