@@ -3,10 +3,35 @@ const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
 const { broadcast } = require('../lib/events');
 const prisma = new PrismaClient();
+const GOOGLE_MEET_REGEX = /^https?:\/\/meet\.google\.com\/[a-z0-9-]+(?:[/?][^\s]*)?$/i;
 
 const include = {
   organizer: { select: { id: true, name: true, avatar: true, title: true } }
 };
+
+function sanitizeMeetLink(rawLink) {
+  const trimmed = String(rawLink || '').trim();
+  if (!trimmed) {
+    throw new Error('Google Meet link is required');
+  }
+  if (!GOOGLE_MEET_REGEX.test(trimmed)) {
+    throw new Error('Please provide a valid Google Meet link');
+  }
+  return trimmed;
+}
+
+function normalizeRecurring(value) {
+  return value === 'daily' ? 'daily' : null;
+}
+
+function normalizeAttendees(attendeeIds, organizerId) {
+  const ids = Array.isArray(attendeeIds) ? attendeeIds.filter(Boolean) : [];
+  return Array.from(new Set([organizerId, ...ids]));
+}
+
+function getErrorStatus(message = '') {
+  return /required|valid/i.test(message) ? 400 : 500;
+}
 
 // GET /api/meetings
 router.get('/', auth, async (req, res) => {
@@ -24,16 +49,18 @@ router.get('/', auth, async (req, res) => {
 // POST /api/meetings
 router.post('/', auth, async (req, res) => {
   try {
-    const { title, date, time, duration, attendeeIds, meetLink, description } = req.body;
+    const { title, date, time, duration, attendeeIds, meetLink, description, recurring } = req.body;
+    const normalizedAttendees = normalizeAttendees(attendeeIds, req.user.id);
     const meeting = await prisma.meeting.create({
       data: {
         title,
         date,
         time,
         duration: duration || '30 min',
-        attendeeIds: JSON.stringify(attendeeIds || []),
-        meetLink: meetLink || null,
+        attendeeIds: JSON.stringify(normalizedAttendees),
+        meetLink: sanitizeMeetLink(meetLink),
         description: description || null,
+        recurring: normalizeRecurring(recurring),
         organizerId: req.user.id,
       },
       include
@@ -45,7 +72,7 @@ router.post('/', auth, async (req, res) => {
     res.json(payload);
   } catch (err) {
     console.error('Create meeting failed:', err);
-    res.status(500).json({ error: 'Server error' });
+    res.status(getErrorStatus(err.message)).json({ error: err.message || 'Server error' });
   }
 });
 
@@ -58,7 +85,9 @@ router.patch('/:id', auth, async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
     const { attendeeIds, ...data } = req.body;
-    if (attendeeIds !== undefined) data.attendeeIds = JSON.stringify(attendeeIds);
+    if (attendeeIds !== undefined) data.attendeeIds = JSON.stringify(normalizeAttendees(attendeeIds, meeting.organizerId));
+    if (data.meetLink !== undefined) data.meetLink = sanitizeMeetLink(data.meetLink);
+    if (data.recurring !== undefined) data.recurring = normalizeRecurring(data.recurring);
     const updated = await prisma.meeting.update({
       where: { id: req.params.id },
       data,
@@ -69,7 +98,7 @@ router.patch('/:id', auth, async (req, res) => {
     broadcast('meeting:update', payload, targets);
     res.json(payload);
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    res.status(getErrorStatus(err.message)).json({ error: err.message || 'Server error' });
   }
 });
 
@@ -86,7 +115,7 @@ router.delete('/:id', auth, async (req, res) => {
     broadcast('meeting:delete', { id: req.params.id }, targets);
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: 'Server error' });
+    res.status(getErrorStatus(err.message)).json({ error: err.message || 'Server error' });
   }
 });
 

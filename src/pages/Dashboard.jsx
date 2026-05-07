@@ -10,6 +10,7 @@ import {
   Eyebrow, Section, Divider, Empty, priorityTone, statusTone, timeAgo, fmtDate
 } from '../components/ui';
 import { normalizeMeetLink } from '../utils/meet';
+import { isMeetingToday, isUpcomingMeeting, sortMeetingsByNextOccurrence } from '../utils/meetingSchedule';
 import { getPresence, getStatusText } from '../utils/presence';
 
 function getIstDateString(date = new Date()) {
@@ -52,7 +53,10 @@ export default function Dashboard() {
   const today = getIstDateString();
   const myTasks = tasks.filter(t => t.assigneeId === currentUser?.id);
   const dueTodayTasks = myTasks.filter(t => t.dueDate === today && t.status !== 'Completed');
-  const upcomingMeetings = meetings.filter(m => m.date >= today && (m.attendeeIds || []).includes(currentUser?.id));
+  const upcomingMeetings = sortMeetingsByNextOccurrence(
+    meetings.filter((meeting) => isUpcomingMeeting(meeting, today) && (meeting.attendeeIds || []).includes(currentUser?.id)),
+    today
+  );
   const todaySession = todayAttendance && !todayAttendance.signOut ? todayAttendance : null;
 
   // Leave balance from approved leaves
@@ -85,7 +89,7 @@ export default function Dashboard() {
           sub={todaySession ? `Since ${todaySession.signIn}` : todayAttendance?.hours ? todayAttendance.hours : 'Tap Attendance to sign in'} />
         <StatCard label="My Tasks" value={myTasks.filter(t => t.status !== 'Completed').length}
           sub={`${dueTodayTasks.length} due today`} icon={ClipboardList} />
-        <StatCard label="Today's Meetings" value={upcomingMeetings.filter(m => m.date === today).length}
+        <StatCard label="Today's Meetings" value={upcomingMeetings.filter((meeting) => isMeetingToday(meeting, today)).length}
           sub={upcomingMeetings.length > 0 ? `Next: ${upcomingMeetings[0]?.time}` : 'No meetings'} icon={CalendarCheck} />
         <StatCard label="Leave Balance" value={leaveBalance} sub="Days remaining · 2026" icon={Clock} />
       </div>
@@ -138,10 +142,14 @@ export default function Dashboard() {
               <div style={{ fontSize: 13.5, fontWeight: 500 }}>{m.title}</div>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <AvatarStack users={(m.attendeeIds || []).map(id => users.find(u => u.id === id)).filter(Boolean)} size={22} />
-                <a href={normalizeMeetLink(m.meetLink, m.id)} target="_blank" rel="noopener noreferrer"
-                  style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
-                  <Video size={12} />Join Call
-                </a>
+                {normalizeMeetLink(m.meetLink) ? (
+                  <a href={normalizeMeetLink(m.meetLink)} target="_blank" rel="noopener noreferrer"
+                    style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4, textDecoration: 'none' }}>
+                    <Video size={12} />Join Call
+                  </a>
+                ) : (
+                  <span style={{ fontSize: 11, color: 'var(--fg-3)', fontWeight: 600 }}>No meet link</span>
+                )}
               </div>
             </div>
           ))}
@@ -216,7 +224,10 @@ function FounderDashboard() {
   const presentToday = todayAttendance.filter(a => ['Present', 'Remote'].includes(a.status)).length;
   const pendingLeaves = leaves.filter(l => l.status === 'Pending');
   const openTasks = tasks.filter(t => t.status !== 'Completed');
-  const upcomingMeetings = meetings.filter(m => m.date >= today);
+  const upcomingMeetings = sortMeetingsByNextOccurrence(
+    meetings.filter((meeting) => isUpcomingMeeting(meeting, today)),
+    today
+  );
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 28, maxWidth: 1400, margin: '0 auto' }} className="fade-in">
@@ -242,7 +253,7 @@ function FounderDashboard() {
         <StatCard hero gradientNum label="Team Present Today" value={`${presentToday} / ${users.length}`} sub={`${users.length - presentToday} away`} delta={presentToday > 3 ? '+Good' : ''} />
         <StatCard label="Open Tasks" value={openTasks.length} sub={`${tasks.filter(t => t.priority === 'High' && t.status !== 'Completed').length} high priority`} icon={ClipboardList} />
         <StatCard label="Pending Leaves" value={pendingLeaves.length} sub="Awaiting your approval" icon={AlertCircle} />
-        <StatCard label="Meetings Today" value={upcomingMeetings.filter(m => m.date === today).length} sub={`${upcomingMeetings.length} total upcoming`} icon={CalendarCheck} />
+        <StatCard label="Meetings Today" value={upcomingMeetings.filter((meeting) => isMeetingToday(meeting, today)).length} sub={`${upcomingMeetings.length} total upcoming`} icon={CalendarCheck} />
         <StatCard label="Team Size" value={users.length} sub={`${users.filter(u => u.role === 'intern').length} interns`} icon={Users} />
       </div>
 

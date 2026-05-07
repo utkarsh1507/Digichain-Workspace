@@ -1,11 +1,9 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Hash, Plus, Send, Paperclip, Video, Search, Users, X, File, Image, CheckCheck, ExternalLink, Smile, Trash2 } from 'lucide-react';
+import { Hash, Plus, Send, Paperclip, Search, Users, X, File, Image, CheckCheck, Smile, Trash2 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar, IconBtn, Button, Empty, Modal, Input, fmtTime } from '../components/ui';
 import { messagesApi } from '../api/index.js';
-import { extractMeetLink, normalizeMeetLink, stripMeetLinkFromText } from '../utils/meet';
-import { ensureGoogleConnected, createGoogleMeet } from '../utils/googleMeet';
 import { getPresence, getStatusText, getUserSubtitle } from '../utils/presence';
 const URL_REGEX = /(https?:\/\/[^\s]+)/g;
 
@@ -14,7 +12,7 @@ const EMOJIS = ['👍', '❤️', '🔥', '🚀', '✅', '😂', '😮', '👏']
 export default function Messages() {
   const {
     state, loadMessages, sendMessage, sendFile, reactToMessage, deleteMessage,
-    ensureDm, createChannel, deleteChannel, markChannelRead, addToast, setActiveChannel,
+    ensureDm, createChannel, deleteChannel, markChannelRead, setActiveChannel,
   } = useApp();
   const { currentUser, channels, channelMessages, channelSeenBy, users, typingByChannel } = state;
   const navigate = useNavigate();
@@ -25,7 +23,6 @@ export default function Messages() {
   const [newChannelOpen, setNewChannelOpen] = useState(false);
   const [channelForm, setChannelForm] = useState({ name: '', description: '', memberIds: [] });
   const [attachedFile, setAttachedFile] = useState(null);
-  const [startingMeet, setStartingMeet] = useState(false);
   const [pickerForMsgId, setPickerForMsgId] = useState(null);
   const [deletingChannel, setDeletingChannel] = useState(false);
   const [deletingMessageId, setDeletingMessageId] = useState(null);
@@ -242,44 +239,6 @@ export default function Messages() {
     }
   }
 
-  async function handleStartInstantMeet() {
-    if (active?.type !== 'dm' || startingMeet) return;
-
-    const otherUser = getDMOtherUser(active);
-    const inviterName = currentUser?.name?.split(' ')[0] || 'Someone';
-
-    setStartingMeet(true);
-    try {
-      const token = localStorage.getItem('dw_token');
-      await ensureGoogleConnected(currentUser.id);
-      const { meetLink } = await createGoogleMeet({
-        userId: currentUser.id,
-        title: `${inviterName} ↔ ${otherUser?.name?.split(' ')[0] || 'Call'}`,
-        description: 'Instant video call via Digichain Workspace',
-        token,
-      });
-
-      const inviteText = `${inviterName} started an instant video call.\nJoin here: ${meetLink}`;
-      await sendMessage(active.id, inviteText);
-      markChannelRead(active.id);
-      addToast({
-        type: 'success',
-        title: 'Instant Meet ready',
-        body: `Link sent to ${otherUser?.name?.split(' ')[0] || 'your teammate'}.`,
-        path: '/messages',
-      });
-      window.open(meetLink, '_blank', 'noopener,noreferrer');
-    } catch (err) {
-      if (err.notConfigured) {
-        addToast({ type: 'error', title: 'Google Meet not configured', body: 'Ask your admin to add Google API credentials to the server.' });
-      } else if (err.message !== 'Google sign-in was cancelled.') {
-        addToast({ type: 'error', title: 'Could not start meet', body: err.message });
-      }
-    } finally {
-      setStartingMeet(false);
-    }
-  }
-
   async function handleCreateChannel(e) {
     e.preventDefault();
     try {
@@ -457,16 +416,6 @@ export default function Messages() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                {active.type === 'dm' && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    icon={Video}
-                    onClick={handleStartInstantMeet}
-                    disabled={startingMeet}>
-                    {startingMeet ? 'Starting...' : 'Instant Meet'}
-                  </Button>
-                )}
                 {active.type === 'channel' && <IconBtn icon={Users} title="Members" />}
                 {canDeleteActive && (
                   <Button
@@ -492,9 +441,7 @@ export default function Messages() {
                   const senderName = getSenderName(m);
                   const grouped = prev && getSenderId(prev) === senderId;
                   const isLastSeenMsg = m.id === lastSeenMsgId;
-                  const rawMeetLink = extractMeetLink(m.text || '');
-                  const meetLink = rawMeetLink ? normalizeMeetLink(rawMeetLink, `instant-${active.id}-${m.id}`) : null;
-                  const inviteText = meetLink ? stripMeetLinkFromText(m.text || '') : m.text;
+                  const messageText = m.text || '';
 
                   const pickerOpen = pickerForMsgId === m.id;
                   const canDeleteMessage = senderId === currentUser?.id || currentUser?.role === 'founder';
@@ -593,33 +540,11 @@ export default function Messages() {
                           )}
 
                           {/* Text */}
-                          {inviteText && (
+                          {messageText && (
                             <div style={{ padding: '8px 12px', borderRadius: isMe ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
                               background: isMe ? 'var(--accent)' : 'var(--bg-2)', color: isMe ? '#fff' : 'var(--fg-1)',
-                              fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap',
-                              display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start', gap: meetLink ? 10 : 0 }}>
-                              {renderTextWithLinks(inviteText, isMe ? '#fff' : 'var(--accent)')}
-                              {meetLink && (
-                                <a
-                                  href={meetLink}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  style={{
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: 6,
-                                    padding: '7px 12px',
-                                    borderRadius: 10,
-                                    background: isMe ? 'rgba(255,255,255,0.16)' : '#fff',
-                                    border: isMe ? '1px solid rgba(255,255,255,0.22)' : '1px solid var(--border-1)',
-                                    color: isMe ? '#fff' : 'var(--accent)',
-                                    fontSize: 12,
-                                    fontWeight: 700,
-                                    textDecoration: 'none',
-                                  }}>
-                                  <Video size={14} />Join Instant Call <ExternalLink size={11} />
-                                </a>
-                              )}
+                              fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
+                              {renderTextWithLinks(messageText, isMe ? '#fff' : 'var(--accent)')}
                             </div>
                           )}
 
