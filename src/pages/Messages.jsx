@@ -32,6 +32,7 @@ export default function Messages() {
   const messagesEndRef = useRef(null);
   const fileInputRef = useRef(null);
   const typingTimerRef = useRef(null);
+  const markReadLastRef = useRef({}); // channelId → last fired ms
 
   // Separate channels and DMs
   const myChannels = channels.filter(c => c.type === 'channel');
@@ -73,12 +74,24 @@ export default function Messages() {
     return () => setActiveChannel(null);
   }, [activeId, setActiveChannel]);
 
+  // Throttled markChannelRead — fires immediately on channel switch,
+  // then at most once every 10 s for incoming messages (avoids a DB write per message).
+  const throttledMarkRead = useCallback((channelId) => {
+    const now = Date.now();
+    const last = markReadLastRef.current[channelId] ?? 0;
+    if (now - last < 10_000) return;
+    markReadLastRef.current[channelId] = now;
+    markChannelRead(channelId);
+  }, [markChannelRead]);
+
   // Load messages + mark as read when switching channels
   useEffect(() => {
     if (!activeId) return;
     if (!channelMessages[activeId]) {
       loadMessages(activeId).catch(() => {});
     }
+    // Force-fire immediately on switch, bypassing the throttle
+    markReadLastRef.current[activeId] = Date.now();
     markChannelRead(activeId);
   }, [activeId]); // eslint-disable-line
 
@@ -89,7 +102,7 @@ export default function Messages() {
     const last = activeMsgs[activeMsgs.length - 1];
     const senderId = last.senderId || last.sender?.id;
     if (senderId !== currentUser?.id) {
-      markChannelRead(activeId);
+      throttledMarkRead(activeId);
     }
   }, [activeMsgs.length, activeId]); // eslint-disable-line
 

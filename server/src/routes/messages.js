@@ -9,6 +9,11 @@ const prisma = new PrismaClient();
 // { channelId: { userId: { name, timestamp } } }
 const typingStore = {};
 
+// ── In-memory channel cache — avoids a DB read on every typing/access check ──
+// { channelId: { channel, expiry } }
+const channelCache = {};
+const CHANNEL_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
 const msgInclude = {
   sender: { select: { id: true, name: true, avatar: true } },
 };
@@ -29,8 +34,17 @@ function isChannelMember(channel, userId) {
   return parseMemberIds(channel.memberIds).includes(userId);
 }
 
+function invalidateChannelCache(channelId) {
+  delete channelCache[channelId];
+}
+
 async function getChannel(channelId) {
-  return prisma.channel.findUnique({ where: { id: channelId } });
+  const now = Date.now();
+  const cached = channelCache[channelId];
+  if (cached && cached.expiry > now) return cached.channel;
+  const channel = await prisma.channel.findUnique({ where: { id: channelId } });
+  if (channel) channelCache[channelId] = { channel, expiry: now + CHANNEL_CACHE_TTL };
+  return channel;
 }
 
 async function requireChannelAccess(channelId, userId, res) {
@@ -59,15 +73,16 @@ router.get('/channels/unread', auth, async (req, res) => {
     readRecords.forEach(r => { readMap[r.channelId] = r.lastReadAt; });
 
     const counts = {};
-    for (const ch of mine) {
+    await Promise.all(mine.map(async (ch) => {
       const readAt = readMap[ch.id];
-      const where = {
-        channelId: ch.id,
-        senderId: { not: req.user.id },
-        ...(readAt ? { timestamp: { gt: readAt } } : {}),
-      };
-      counts[ch.id] = await prisma.message.count({ where });
-    }
+      counts[ch.id] = await prisma.message.count({
+        where: {
+          channelId: ch.id,
+          senderId: { not: req.user.id },
+          ...(readAt ? { timestamp: { gt: readAt } } : {}),
+        },
+      });
+    }));
     res.json(counts);
   } catch (err) {
     console.error(err);
@@ -101,6 +116,7 @@ router.post('/channels', auth, async (req, res) => {
       }
     });
     const parsed = parseChannel(channel);
+    channelCache[channel.id] = { channel, expiry: Date.now() + CHANNEL_CACHE_TTL };
     broadcast('channel:new', parsed, parsed.memberIds);
     res.json(parsed);
   } catch (err) {
@@ -266,6 +282,7 @@ router.delete('/channels/:id', auth, async (req, res) => {
     ]);
 
     delete typingStore[channel.id];
+    invalidateChannelCache(channel.id);
     broadcast('channel:delete', { id: channel.id }, memberIds);
     res.json({ ok: true });
   } catch (err) {
@@ -347,6 +364,7 @@ router.post('/dm/ensure', auth, async (req, res) => {
         data: { name: dmName, type: 'dm', memberIds: JSON.stringify(ids), createdById: req.user.id }
       });
       created = true;
+      channelCache[channel.id] = { channel, expiry: Date.now() + CHANNEL_CACHE_TTL };
     }
     const parsed = parseChannel(channel);
     if (created) {
