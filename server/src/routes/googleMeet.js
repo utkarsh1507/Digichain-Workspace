@@ -35,6 +35,16 @@ function parseTime(timeStr = '') {
   return { hours: h || 0, minutes: m || 0 };
 }
 
+// Pick the best client URL — prefer the first non-localhost entry so that
+// production deployments are not accidentally redirected to localhost.
+function pickClientUrl() {
+  const urls = (process.env.CLIENT_URL || 'http://localhost:5174')
+    .split(',')
+    .map(u => u.trim())
+    .filter(Boolean);
+  return urls.find(u => !u.includes('localhost') && !u.includes('127.0.0.1')) || urls[0];
+}
+
 // ── GET /api/google/auth?userId=xxx ─────────────────────────────────────────
 // Starts the OAuth popup flow
 router.get('/auth', (req, res) => {
@@ -42,12 +52,16 @@ router.get('/auth', (req, res) => {
     return res.status(503).send('Google Meet API is not configured on this server. Add GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI to your environment variables.');
   }
   const { userId } = req.query;
+  // Store the client origin in state so the callback redirects back correctly
+  const origin = req.get('Referer')
+    ? new URL(req.get('Referer')).origin
+    : pickClientUrl();
   const oauth2Client = makeOAuth2Client();
   const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
     scope: ['https://www.googleapis.com/auth/calendar.events'],
-    state: JSON.stringify({ userId: userId || '' }),
+    state: JSON.stringify({ userId: userId || '', origin }),
   });
   res.redirect(url);
 });
@@ -56,14 +70,18 @@ router.get('/auth', (req, res) => {
 // Google redirects here after the user grants permission
 router.get('/callback', async (req, res) => {
   const { code, state, error } = req.query;
-  const clientUrl = (process.env.CLIENT_URL || 'http://localhost:5174').split(',')[0].trim();
+
+  let userId = '';
+  let clientUrl = pickClientUrl();
+  try {
+    const parsed = JSON.parse(state || '{}');
+    userId = parsed.userId || '';
+    if (parsed.origin) clientUrl = parsed.origin;
+  } catch {}
 
   if (error || !code) {
     return res.redirect(`${clientUrl}/google-callback?error=${encodeURIComponent(error || 'access_denied')}`);
   }
-
-  let userId = '';
-  try { ({ userId } = JSON.parse(state || '{}')); } catch {}
 
   try {
     const oauth2Client = makeOAuth2Client();
