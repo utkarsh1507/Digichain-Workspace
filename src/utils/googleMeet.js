@@ -45,15 +45,22 @@ export function openGoogleAuthPopup() {
       else reject(new Error(e.data.error || 'Google auth failed'));
     }
 
-    const timer = setInterval(() => {
+    // Wait 600ms after popup closes before rejecting — gives postMessage
+    // time to arrive and prevents the race-condition auth loop.
+    let graceTimer = null;
+    const pollTimer = setInterval(() => {
       if (popup.closed) {
-        cleanup();
-        reject(new Error('Google sign-in was cancelled.'));
+        clearInterval(pollTimer);
+        graceTimer = setTimeout(() => {
+          cleanup();
+          reject(new Error('Google sign-in was cancelled.'));
+        }, 600);
       }
-    }, 500);
+    }, 300);
 
     function cleanup() {
-      clearInterval(timer);
+      clearInterval(pollTimer);
+      clearTimeout(graceTimer);
       window.removeEventListener('message', onMessage);
     }
 

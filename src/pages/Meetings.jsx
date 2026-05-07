@@ -332,116 +332,96 @@ export default function Meetings() {
           {shown.map(m => <MeetingCard key={m.id} meeting={m} users={users} currentUser={currentUser} onDelete={deleteMeeting} />)}
         </div>}
 
-      {/* Create modal */}
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Schedule Meeting" width={580}>
-        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <Input label="Meeting title" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required placeholder="What's this meeting about?" />
-          <Textarea label="Description" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Agenda, notes…" rows={2} />
+      {/* Create modal — wide two-column layout */}
+      <Modal open={createOpen} onClose={() => { setCreateOpen(false); setForm({ title: '', description: '', date: '', time: '10:00 AM', duration: '30 min', attendeeIds: [currentUser?.id], meetLink: '' }); }} title="Schedule Meeting" width={820}>
+        <form onSubmit={handleCreate} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
 
-          {/* Calendar picker */}
-          <div>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', display: 'block', marginBottom: 8 }}>Date</span>
-            <CalendarPicker value={form.date} onChange={date => setForm(f => ({ ...f, date }))} minDate={todayStr} />
-          </div>
-
-          <div>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', display: 'block', marginBottom: 8 }}>Time</span>
-            <TimeSlotPicker value={form.time} onChange={time => setForm(f => ({ ...f, time }))} />
-          </div>
-
-          <div>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', display: 'block', marginBottom: 8 }}>Duration</span>
-            <DurationPicker value={form.duration} onChange={duration => setForm(f => ({ ...f, duration }))} />
-          </div>
-
-          {/* Google Meet link section */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)' }}>Google Meet link</span>
-              {googleConnected && (
-                <button type="button" onClick={handleDisconnectGoogle}
-                  style={{ fontSize: 11, color: 'var(--fg-3)', background: 'none', border: 'none',
-                    cursor: 'pointer', fontFamily: 'inherit', padding: 0,
-                    display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a371', display: 'inline-block' }} />
-                  Google connected · <span style={{ color: '#e05c5c' }}>Disconnect</span>
-                </button>
-              )}
-            </div>
+          {/* Row 1: title + meet link button side by side */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'flex-end' }}>
+            <Input label="Meeting title" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} required placeholder="What's this meeting about?" />
             {form.meetLink ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 10,
-                background: 'rgba(26,115,232,0.07)', border: '1.5px solid rgba(26,115,232,0.25)' }}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 12px', height: 38, borderRadius: 9,
+                background: 'rgba(26,115,232,0.08)', border: '1.5px solid rgba(26,115,232,0.25)', whiteSpace: 'nowrap' }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style={{ flexShrink: 0 }}>
                   <rect x="0" y="4" width="14" height="12" rx="2" fill="#1a73e8"/>
                   <path d="M1 6l5.5 3.5L12 6" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
                   <path d="M14 9l5-3v12l-5-3V9z" fill="#1a73e8"/>
                 </svg>
-                <span style={{ flex: 1, fontSize: 12, fontWeight: 600, color: '#1a73e8', wordBreak: 'break-all' }}>{form.meetLink}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#1a73e8' }}>Meet ready</span>
                 <button type="button" onClick={() => setForm(f => ({ ...f, meetLink: '' }))}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', fontSize: 18, lineHeight: 1, padding: '0 4px' }}>×</button>
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', fontSize: 16, lineHeight: 1, padding: '0 2px', marginLeft: 2 }}>×</button>
               </div>
             ) : (
               <button type="button" onClick={handleGenerateMeetLink} disabled={generatingLink}
-                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 10,
+                style={{ height: 38, padding: '0 14px', borderRadius: 9, display: 'flex', alignItems: 'center', gap: 7,
                   background: generatingLink ? 'var(--bg-2)' : '#1a73e8',
-                  color: generatingLink ? 'var(--fg-3)' : '#fff', fontSize: 13, fontWeight: 600,
+                  color: generatingLink ? 'var(--fg-3)' : '#fff', fontSize: 12, fontWeight: 600,
                   border: 'none', cursor: generatingLink ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
-                  width: '100%', justifyContent: 'center', transition: 'background 150ms' }}>
-                {generatingLink ? (
-                  <>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style={{ animation: 'spin 1s linear infinite' }}>
-                      <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5" strokeDasharray="40" strokeDashoffset="10" strokeLinecap="round"/>
-                    </svg>
-                    Connecting to Google…
-                  </>
-                ) : (
-                  <>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-                      <rect x="0" y="4" width="14" height="12" rx="2" fill="white" fillOpacity="0.9"/>
-                      <path d="M1 6l5.5 3.5L12 6" stroke="#1a73e8" strokeWidth="1.5" strokeLinecap="round"/>
-                      <path d="M14 9l5-3v12l-5-3V9z" fill="white" fillOpacity="0.9"/>
-                    </svg>
-                    Generate Google Meet link
-                  </>
-                )}
+                  whiteSpace: 'nowrap', transition: 'background 150ms' }}>
+                {generatingLink
+                  ? <><svg width="12" height="12" viewBox="0 0 24 24" fill="none" style={{ animation: 'spin 1s linear infinite' }}><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="2.5" strokeDasharray="40" strokeDashoffset="10" strokeLinecap="round"/></svg>Connecting…</>
+                  : <><svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="0" y="4" width="14" height="12" rx="2" fill="white" fillOpacity="0.9"/><path d="M1 6l5.5 3.5L12 6" stroke="#1a73e8" strokeWidth="1.5" strokeLinecap="round"/><path d="M14 9l5-3v12l-5-3V9z" fill="white" fillOpacity="0.9"/></svg>Generate Meet link</>
+                }
               </button>
             )}
-            <p style={{ margin: '6px 0 0', fontSize: 11, color: 'var(--fg-3)' }}>
-              {form.meetLink
-                ? 'A unique Google Meet room will be shared with all attendees.'
-                : 'Creates a real Google Meet room. All attendees join the same room automatically.'}
-            </p>
           </div>
 
-          {/* Attendees */}
-          <div>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', display: 'block', marginBottom: 8 }}>Attendees</span>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 180, overflowY: 'auto' }}>
-              {users.map(u => (
-                <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 10px', borderRadius: 8, cursor: 'pointer' }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-1)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-                  <input type="checkbox" checked={form.attendeeIds.includes(u.id)} onChange={() => toggleAttendee(u.id)}
-                    style={{ accentColor: 'var(--accent)', width: 15, height: 15 }} />
-                  <Avatar name={u.name} size={28} src={u.avatar} />
-                  <span style={{ fontSize: 13, fontWeight: 500 }}>{u.name}</span>
-                  <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>{u.title}</span>
-                </label>
-              ))}
+          {/* Row 2: calendar (left) + time slots (right) */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 6 }}>Date</span>
+              <CalendarPicker value={form.date} onChange={date => setForm(f => ({ ...f, date }))} minDate={todayStr} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 6 }}>Time</span>
+                <TimeSlotPicker value={form.time} onChange={time => setForm(f => ({ ...f, time }))} />
+              </div>
+              <div>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 6 }}>Duration</span>
+                <DurationPicker value={form.duration} onChange={duration => setForm(f => ({ ...f, duration }))} />
+              </div>
+              {/* Attendees in the right column */}
+              <div style={{ flex: 1 }}>
+                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--fg-3)', textTransform: 'uppercase', letterSpacing: '0.06em', display: 'block', marginBottom: 6 }}>Attendees</span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, maxHeight: 140, overflowY: 'auto',
+                  background: 'var(--bg-1)', borderRadius: 10, border: '1.5px solid var(--border-1)', padding: '4px 6px' }}>
+                  {users.map(u => (
+                    <label key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '5px 6px', borderRadius: 7, cursor: 'pointer' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-2)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
+                      <input type="checkbox" checked={form.attendeeIds.includes(u.id)} onChange={() => toggleAttendee(u.id)}
+                        style={{ accentColor: 'var(--accent)', width: 13, height: 13, flexShrink: 0 }} />
+                      <Avatar name={u.name} size={22} src={u.avatar} />
+                      <span style={{ fontSize: 12, fontWeight: 500, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.name}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8 }}>
-            {!form.meetLink && (
-              <span style={{ fontSize: 11, color: '#e07a2f', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
-                  <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="#e07a2f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                </svg>
-                Generate a Meet link first
-              </span>
-            )}
-            <Button type="button" variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button type="submit" variant="primary" icon={Calendar} disabled={!form.meetLink}>Schedule</Button>
+          {/* Footer */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 4, borderTop: '1px solid var(--border-1)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              {googleConnected && (
+                <button type="button" onClick={handleDisconnectGoogle}
+                  style={{ fontSize: 11, color: 'var(--fg-3)', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', padding: 0, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#16a371', display: 'inline-block' }} />
+                  Google connected · <span style={{ color: '#e05c5c' }}>Disconnect</span>
+                </button>
+              )}
+              {!form.meetLink && (
+                <span style={{ fontSize: 11, color: '#e07a2f', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" stroke="#e07a2f" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                  Generate a Meet link first
+                </span>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <Button type="button" variant="ghost" onClick={() => setCreateOpen(false)}>Cancel</Button>
+              <Button type="submit" variant="primary" icon={Calendar} disabled={!form.meetLink}>Schedule</Button>
+            </div>
           </div>
         </form>
       </Modal>
