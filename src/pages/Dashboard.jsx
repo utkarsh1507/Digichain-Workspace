@@ -12,6 +12,18 @@ import {
 import { normalizeMeetLink } from '../utils/meet';
 import { getPresence, getStatusText } from '../utils/presence';
 
+function getIstDateString(date = new Date()) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date).map((part) => [part.type, part.value])
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
 function greet(name) {
   const h = new Date().getHours();
   const g = h < 12 ? 'morning' : h < 17 ? 'afternoon' : 'evening';
@@ -37,7 +49,7 @@ export default function Dashboard() {
 
   if (currentUser?.role === 'founder') return <FounderDashboard />;
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getIstDateString();
   const myTasks = tasks.filter(t => t.assigneeId === currentUser?.id);
   const dueTodayTasks = myTasks.filter(t => t.dueDate === today && t.status !== 'Completed');
   const upcomingMeetings = meetings.filter(m => m.date >= today && (m.attendeeIds || []).includes(currentUser?.id));
@@ -73,7 +85,7 @@ export default function Dashboard() {
           sub={todaySession ? `Since ${todaySession.signIn}` : todayAttendance?.hours ? todayAttendance.hours : 'Tap Attendance to sign in'} />
         <StatCard label="My Tasks" value={myTasks.filter(t => t.status !== 'Completed').length}
           sub={`${dueTodayTasks.length} due today`} icon={ClipboardList} />
-        <StatCard label="Today's Meetings" value={upcomingMeetings.filter(m => m.date === new Date().toISOString().split('T')[0]).length}
+        <StatCard label="Today's Meetings" value={upcomingMeetings.filter(m => m.date === today).length}
           sub={upcomingMeetings.length > 0 ? `Next: ${upcomingMeetings[0]?.time}` : 'No meetings'} icon={CalendarCheck} />
         <StatCard label="Leave Balance" value={leaveBalance} sub="Days remaining · 2026" icon={Clock} />
       </div>
@@ -199,7 +211,7 @@ function FounderDashboard() {
   const navigate = useNavigate();
   const quote = QUOTES[new Date().getDay() % QUOTES.length];
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getIstDateString();
   const todayAttendance = attendance.filter(a => a.date === today);
   const presentToday = todayAttendance.filter(a => ['Present', 'Remote'].includes(a.status)).length;
   const pendingLeaves = leaves.filter(l => l.status === 'Pending');

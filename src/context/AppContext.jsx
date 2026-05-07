@@ -7,6 +7,7 @@ import {
 import { notify } from '../utils/notifications.js';
 
 const AppContext = createContext(null);
+const IST_TIME_ZONE = 'Asia/Kolkata';
 
 // ─── Reducer ──────────────────────────────────────────────────────────────────
 const initialState = {
@@ -27,6 +28,24 @@ const initialState = {
   loading: true,
   loginError: null,
 };
+
+function getIstDateString(date = new Date()) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-IN', {
+      timeZone: IST_TIME_ZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date).map((part) => [part.type, part.value])
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function getTodayAttendanceRecord(records, userId) {
+  if (!Array.isArray(records) || records.length === 0) return null;
+  if (!userId) return records[0] || null;
+  return records.find((record) => record.userId === userId) || null;
+}
 
 function upsertById(list, item, { prepend = true } = {}) {
   const idx = list.findIndex((entry) => entry.id === item.id);
@@ -218,7 +237,7 @@ function reducer(state, action) {
       };
     }
     case 'UPSERT_ATTENDANCE': {
-      const today = new Date().toISOString().split('T')[0];
+      const today = getIstDateString();
       const isTodayForCurrentUser =
         action.record.userId === state.currentUser?.id && action.record.date === today;
       return {
@@ -323,7 +342,7 @@ export function AppProvider({ children }) {
   }
 
   // ── Load all app data ────────────────────────────────────────────────────────
-  const loadAppData = useCallback(async () => {
+  const loadAppData = useCallback(async (activeUser = state.currentUser) => {
     try {
       const [users, attendance, todayList, leaves, tasks, channels, announcements, documents, meetings, unreadCounts] =
         await Promise.all([
@@ -340,7 +359,7 @@ export function AppProvider({ children }) {
         ]);
       dispatch({ type: 'SET_USERS', users });
       dispatch({ type: 'SET_ATTENDANCE', records: attendance });
-      dispatch({ type: 'SET_TODAY', record: todayList[0] || null });
+      dispatch({ type: 'SET_TODAY', record: getTodayAttendanceRecord(todayList, activeUser?.id) });
       dispatch({ type: 'SET_LEAVES', leaves });
       dispatch({ type: 'SET_TASKS', tasks });
       dispatch({ type: 'SET_CHANNELS', channels });
@@ -355,7 +374,7 @@ export function AppProvider({ children }) {
     } finally {
       dispatch({ type: 'SET_LOADING', loading: false });
     }
-  }, []);
+  }, [state.currentUser]);
 
   // ── Session restore ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -367,7 +386,7 @@ export function AppProvider({ children }) {
     authApi.me()
       .then(user => {
         dispatch({ type: 'SET_USER', user });
-        return loadAppData();
+        return loadAppData(user);
       })
       .catch(() => {
         localStorage.removeItem('dw_token');
@@ -682,7 +701,7 @@ export function AppProvider({ children }) {
       localStorage.setItem('dw_token', token);
       dispatch({ type: 'SET_USER', user });
       dispatch({ type: 'SET_LOADING', loading: true });
-      await loadAppData();
+      await loadAppData(user);
     } catch (err) {
       dispatch({ type: 'LOGIN_ERROR', message: err.message || 'Invalid email or password.' });
     }
