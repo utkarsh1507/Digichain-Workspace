@@ -83,6 +83,7 @@ export function Shell({ children }) {
   const [showNotifyPrompt, setShowNotifyPrompt] = useState(false);
   const [statusDraft, setStatusDraft] = useState({ statusPreset: 'working', statusMessage: '' });
   const [savingStatus, setSavingStatus] = useState(false);
+  const [statusPickerOpen, setStatusPickerOpen] = useState(false);
 
   // Ask for desktop notification permission on first mount (one-time soft prompt)
   useEffect(() => {
@@ -198,7 +199,7 @@ export function Shell({ children }) {
 
         {/* User section */}
         <div style={{ marginTop: 'auto', paddingTop: 12, borderTop: '1px solid var(--border-1)', position: 'relative' }}>
-          <div onClick={() => setProfileOpen(!profileOpen)}
+          <div onClick={() => { setProfileOpen(o => { if (o) setStatusPickerOpen(false); return !o; }); }}
             style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 6px',
               borderRadius: 10, cursor: 'pointer', transition: 'background 120ms' }}
             onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-3)'}
@@ -229,19 +230,52 @@ export function Shell({ children }) {
                     {myStatusMeta.label}
                   </span>
                 </div>
-                <select
-                  value={statusDraft.statusPreset}
-                  onChange={(e) => {
-                    const next = { ...statusDraft, statusPreset: e.target.value };
-                    setStatusDraft(next);
-                    if (e.target.value !== 'custom') saveStatus(next);
-                  }}
-                  style={{ width: '100%', height: 34, borderRadius: 8, border: '1px solid var(--border-1)', padding: '0 8px',
-                    background: '#fff', color: 'var(--fg-1)', fontFamily: 'inherit', fontSize: 12, outline: 'none' }}>
-                  {STATUS_PRESETS.map((preset) => (
-                    <option key={preset.value} value={preset.value}>{preset.emoji} {preset.label}</option>
-                  ))}
-                </select>
+                {/* Custom status dropdown */}
+                <div style={{ position: 'relative' }}>
+                  <button
+                    type="button"
+                    onClick={() => setStatusPickerOpen(o => !o)}
+                    style={{ width: '100%', height: 34, borderRadius: 8, border: '1.5px solid var(--border-1)',
+                      padding: '0 10px', background: '#fff', color: 'var(--fg-1)', fontFamily: 'inherit',
+                      fontSize: 12, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+                      outline: 'none', transition: 'border-color 120ms',
+                      ...(statusPickerOpen ? { borderColor: 'var(--accent)', boxShadow: '0 0 0 3px rgba(123,97,255,0.12)' } : {}) }}>
+                    <span style={{ fontSize: 15 }}>{STATUS_PRESETS.find(p => p.value === statusDraft.statusPreset)?.emoji}</span>
+                    <span style={{ flex: 1, textAlign: 'left', fontWeight: 500 }}>
+                      {STATUS_PRESETS.find(p => p.value === statusDraft.statusPreset)?.label}
+                    </span>
+                    <ChevronUp size={13} color="var(--fg-3)"
+                      style={{ transform: statusPickerOpen ? 'rotate(0deg)' : 'rotate(180deg)', transition: 'transform 150ms', flexShrink: 0 }} />
+                  </button>
+                  {statusPickerOpen && (
+                    <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, marginBottom: 4,
+                      background: '#fff', border: '1px solid var(--border-1)', borderRadius: 10,
+                      boxShadow: '0 4px 24px rgba(14,14,20,0.12)', padding: 4, zIndex: 200 }}>
+                      {STATUS_PRESETS.map(preset => {
+                        const isActive = statusDraft.statusPreset === preset.value;
+                        const dotColor = preset.tone === 'success' ? '#16a371' : preset.tone === 'warning' ? '#d97706' : preset.tone === 'danger' ? '#e05c5c' : preset.tone === 'info' ? '#2563eb' : 'var(--accent)';
+                        return (
+                          <button key={preset.value} type="button"
+                            onClick={() => {
+                              const next = { ...statusDraft, statusPreset: preset.value };
+                              setStatusDraft(next);
+                              setStatusPickerOpen(false);
+                              if (preset.value !== 'custom') saveStatus(next);
+                            }}
+                            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px',
+                              borderRadius: 7, border: 'none', background: isActive ? 'var(--bg-2)' : 'transparent',
+                              cursor: 'pointer', fontSize: 12, fontFamily: 'inherit', color: 'var(--fg-1)', textAlign: 'left' }}
+                            onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = 'var(--bg-1)'; }}
+                            onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = 'transparent'; }}>
+                            <span style={{ fontSize: 15 }}>{preset.emoji}</span>
+                            <span style={{ flex: 1, fontWeight: isActive ? 600 : 400 }}>{preset.label}</span>
+                            {isActive && <span style={{ width: 7, height: 7, borderRadius: '50%', background: dotColor, flexShrink: 0 }} />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
                 {statusDraft.statusPreset === 'custom' && (
                   <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
                     <input

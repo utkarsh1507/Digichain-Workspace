@@ -104,7 +104,7 @@ router.post('/signin', auth, async (req, res) => {
 // POST /api/attendance/signout
 router.post('/signout', auth, async (req, res) => {
   try {
-    if (!ensureSignWindow(res)) return;
+    // Sign-out is allowed at any time so employees can clock out if they forgot before 7 PM
     const { date: today, time: signOut } = getIstParts();
     const record = await prisma.attendance.findUnique({ where: { userId_date: { userId: req.user.id, date: today } } });
     if (!record) return res.status(404).json({ error: 'No sign-in record for today' });

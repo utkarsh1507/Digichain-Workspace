@@ -1,41 +1,30 @@
-const CALL_URL_REGEX = /https?:\/\/(?:meet\.google\.com|meet\.jit\.si)\/[^\s]+/i;
+const GOOGLE_MEET_REGEX = /https?:\/\/meet\.google\.com\/[a-z0-9-]+/i;
+const ANY_CALL_REGEX = /https?:\/\/(?:meet\.google\.com|meet\.jit\.si)\/[^\s]+/i;
 
-function slugify(value = '') {
-  return String(value)
-    .toLowerCase()
-    .replace(/https?:\/\//g, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48);
+export function isGoogleMeetLink(url = '') {
+  return GOOGLE_MEET_REGEX.test(url);
 }
 
-function randomId() {
-  return Math.random().toString(36).slice(2, 10);
-}
-
-export function buildRoomName(seed = '') {
-  const base = slugify(seed) || `call-${randomId()}`;
-  return `digichain-${base}`;
-}
-
-export function generateMeetLink(seed = '') {
-  return `https://meet.jit.si/${buildRoomName(seed)}`;
+// Opens Google Meet's "new meeting" page — user creates their own room
+export function generateMeetLink() {
+  return 'https://meet.google.com/new';
 }
 
 export function extractMeetLink(text = '') {
-  return text.match(CALL_URL_REGEX)?.[0] || null;
+  return text.match(GOOGLE_MEET_REGEX)?.[0] || null;
 }
 
-export function normalizeMeetLink(link, fallbackSeed = '') {
-  if (!link) return generateMeetLink(fallbackSeed);
-  if (/^https:\/\/meet\.jit\.si\//i.test(link)) return link;
-  if (/^https:\/\/meet\.google\.com\//i.test(link)) return generateMeetLink(fallbackSeed || link);
-  return link;
+// Returns the link as-is if it's a valid Google Meet link,
+// otherwise falls back to the "new meeting" URL
+export function normalizeMeetLink(link) {
+  if (!link) return 'https://meet.google.com/new';
+  if (isGoogleMeetLink(link)) return link;
+  return 'https://meet.google.com/new';
 }
 
 export function stripMeetLinkFromText(text = '') {
   return text
-    .replace(CALL_URL_REGEX, '')
+    .replace(ANY_CALL_REGEX, '')
     .replace(/\bjoin here:\s*$/i, '')
     .replace(/\n{3,}/g, '\n\n')
     .trim();

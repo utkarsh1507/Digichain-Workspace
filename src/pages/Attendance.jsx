@@ -165,7 +165,7 @@ export default function Attendance() {
                 ? `Worked ${todayRecord.hours} · Signed out at ${todayRecord.signOut}`
                 : attendanceOpen
                 ? 'Click "Sign in" to start tracking your hours.'
-                : 'Sign in and sign out are available from 9:00 AM to 7:00 PM IST.'}
+                : 'Sign-in is available 9:00 AM – 7:00 PM IST. You can sign out at any time.'}
             </div>
             {todaySession && (
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '8px 12px', borderRadius: 999, background: 'rgba(22,163,113,0.08)', width: 'fit-content' }}>
@@ -181,7 +181,7 @@ export default function Attendance() {
               </Button>
             )}
             {todaySession && (
-              <Button variant="secondary" size="lg" icon={LogOut} onClick={handleSignOut} disabled={busy || !attendanceOpen}>
+              <Button variant="secondary" size="lg" icon={LogOut} onClick={handleSignOut} disabled={busy}>
                 {busy ? 'Signing out…' : 'Sign out'}
               </Button>
             )}
