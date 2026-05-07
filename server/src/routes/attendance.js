@@ -123,4 +123,16 @@ router.post('/signout', auth, async (req, res) => {
   }
 });
 
+// DELETE /api/attendance/today — remove today's record so user can sign in again
+router.delete('/today', auth, async (req, res) => {
+  try {
+    const today = getIstParts().date;
+    await prisma.attendance.deleteMany({ where: { userId: req.user.id, date: today } });
+    broadcast('attendance:delete', { userId: req.user.id, date: today }, await getAttendanceTargets(req.user.id));
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;
