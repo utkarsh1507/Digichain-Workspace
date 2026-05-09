@@ -537,7 +537,7 @@ export default function Messages() {
                                 <button
                                   title="Download"
                                   onClick={() => {
-                                    window.open(m.attachmentUrl, '_blank', 'noopener,noreferrer');
+                                    window.open(messagesApi.getAttachmentUrl(activeId, m.id), '_blank', 'noopener,noreferrer');
                                   }}
                                   style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--accent)', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
                                   <Download size={16} />

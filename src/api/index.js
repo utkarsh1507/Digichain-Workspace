@@ -26,6 +26,12 @@ function getToken() {
   return localStorage.getItem('dw_token');
 }
 
+function buildAuthedUrl(path) {
+  const token = getToken();
+  const separator = path.includes('?') ? '&' : '?';
+  return `${BASE}${path}${token ? `${separator}token=${encodeURIComponent(token)}` : ''}`;
+}
+
 function buildQuery(params = {}) {
   const search = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -152,6 +158,7 @@ export const messagesApi = {
     if (text) fd.append('text', text);
     return req('POST', `/channels/${channelId}/upload`, fd, true);
   },
+  getAttachmentUrl: (channelId, messageId) => buildAuthedUrl(`/channels/${channelId}/messages/${messageId}/attachment`),
   react: (channelId, messageId, emoji) => req('POST', `/channels/${channelId}/react`, { messageId, emoji }),
   ensureDm: (otherUserId) => req('POST', '/dm/ensure', { otherUserId }),
   // Unread / read receipts
@@ -181,6 +188,7 @@ export const documentsApi = {
     if (description) fd.append('description', description);
     return req('POST', '/documents/upload', fd, true);
   },
+  getDownloadUrl: (id) => buildAuthedUrl(`/documents/${id}/download`),
   remove: (id) => req('DELETE', `/documents/${id}`),
 };
 

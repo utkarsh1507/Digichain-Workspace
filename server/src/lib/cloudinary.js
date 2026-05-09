@@ -76,6 +76,51 @@ function normalizeStoredFileUrl(url, filename) {
   return url.replace('/image/upload/', '/raw/upload/').replace('/video/upload/', '/raw/upload/');
 }
 
+function parseCloudinaryAsset(url, fallbackName) {
+  if (!url) return null;
+
+  try {
+    const parsed = new URL(url);
+    const parts = parsed.pathname.split('/').filter(Boolean);
+    const uploadIndex = parts.findIndex((part) => part === 'upload');
+
+    if (uploadIndex <= 0 || uploadIndex >= parts.length - 1) return null;
+
+    const resourceType = parts[uploadIndex - 1] || 'raw';
+    const sourceParts = parts.slice(uploadIndex + 1);
+    if (sourceParts[0] && /^v\d+$/.test(sourceParts[0])) {
+      sourceParts.shift();
+    }
+
+    const source = decodeURIComponent(sourceParts.join('/'));
+    const format = getFileExtension(fallbackName || source);
+    const publicId = format ? source.replace(new RegExp(`\\.${format}$`, 'i'), '') : source;
+
+    if (!publicId) return null;
+
+    return {
+      resourceType,
+      publicId,
+      format: format || undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function getSignedDownloadUrl(url, filename, options = {}) {
+  const asset = parseCloudinaryAsset(url, filename);
+  if (!asset) return normalizeStoredFileUrl(url, filename);
+
+  const expiresAt = Math.floor(Date.now() / 1000) + (options.ttlSeconds || 60 * 10);
+  return cloudinary.utils.private_download_url(asset.publicId, asset.format, {
+    resource_type: asset.resourceType,
+    type: 'upload',
+    attachment: options.attachmentName || filename || true,
+    expires_at: expiresAt,
+  });
+}
+
 const avatarStorage = new CloudinaryStorage({
   cloudinary,
   params: {
@@ -116,6 +161,7 @@ const documentStorage = new CloudinaryStorage({
 module.exports = {
   cloudinary,
   getUploadedFileUrl,
+  getSignedDownloadUrl,
   normalizeStoredFileUrl,
   uploadAvatar: multer({ storage: avatarStorage, limits: { fileSize: 5 * 1024 * 1024 } }),
   uploadMessage: multer({ storage: messageStorage, limits: { fileSize: 20 * 1024 * 1024 } }),

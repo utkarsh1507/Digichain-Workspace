@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react';
 import { Upload, Folder, FileText, File, FileSpreadsheet, Image, Trash2, Download, Pin, Search } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { documentsApi } from '../api/index.js';
 import { Card, Button, IconBtn, Eyebrow, Section, Modal, Select, Avatar, Empty, fmtDate } from '../components/ui';
 
 const FOLDERS = [
@@ -151,7 +152,7 @@ export default function Documents() {
                   <span style={{ fontSize: 12, color: 'var(--fg-3)' }}>{fmtDate(d.uploadedAt || d.createdAt)}</span>
                   <div style={{ display: 'flex', gap: 4 }}>
                     {d.url && d.url !== '#' && (
-                      <a href={d.url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', textDecoration: 'none' }}>
+                      <a href={documentsApi.getDownloadUrl(d.id)} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', textDecoration: 'none' }}>
                         <IconBtn icon={Download} size={28} title="Download" />
                       </a>
                     )}

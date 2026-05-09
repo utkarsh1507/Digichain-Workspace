@@ -5,6 +5,7 @@ const auth = require('../middleware/auth');
 const {
   uploadDocument: uploadDoc,
   getUploadedFileUrl,
+  getSignedDownloadUrl,
   normalizeStoredFileUrl,
 } = require('../lib/cloudinary');
 const { broadcast } = require('../lib/events');
@@ -62,6 +63,24 @@ router.post('/upload', auth, uploadDoc.single('file'), async (req, res) => {
     };
     broadcast('document:new', normalizedDocument);
     res.json(normalizedDocument);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/documents/:id/download
+router.get('/:id/download', auth, async (req, res) => {
+  try {
+    const doc = await prisma.document.findUnique({ where: { id: req.params.id } });
+    if (!doc) return res.status(404).json({ error: 'Not found' });
+
+    if (!doc.url) return res.status(404).json({ error: 'File URL missing' });
+
+    const downloadUrl = getSignedDownloadUrl(doc.url, doc.name, {
+      attachmentName: doc.name,
+    });
+
+    res.redirect(downloadUrl);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }

@@ -4,6 +4,7 @@ const auth = require('../middleware/auth');
 const {
   uploadMessage: uploadFile,
   getUploadedFileUrl,
+  getSignedDownloadUrl,
   normalizeStoredFileUrl,
 } = require('../lib/cloudinary');
 const { broadcast } = require('../lib/events');
@@ -210,6 +211,30 @@ router.post('/channels/:id/upload', auth, uploadFile.single('file'), async (req,
     const payload = normalizeMessageAttachment({ ...msg, reactions: [] });
     broadcast('message:new', payload, parseMemberIds(channel.memberIds));
     res.json(payload);
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// GET /api/channels/:channelId/messages/:messageId/attachment
+router.get('/channels/:channelId/messages/:messageId/attachment', auth, async (req, res) => {
+  try {
+    const channel = await requireChannelAccess(req.params.channelId, req.user.id, res);
+    if (!channel) return;
+
+    const msg = await prisma.message.findFirst({
+      where: { id: req.params.messageId, channelId: channel.id },
+    });
+
+    if (!msg || !msg.attachmentUrl) {
+      return res.status(404).json({ error: 'Attachment not found' });
+    }
+
+    const downloadUrl = getSignedDownloadUrl(msg.attachmentUrl, msg.attachmentName, {
+      attachmentName: msg.attachmentName,
+    });
+
+    res.redirect(downloadUrl);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
