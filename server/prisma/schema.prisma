@@ -49,6 +49,7 @@ model Attendance {
   location String?
 
   @@unique([userId, date])
+  @@index([date, userId])
 }
 
 model Leave {

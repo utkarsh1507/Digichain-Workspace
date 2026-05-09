@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom';
 import { Camera, Edit3, Save, X, Mail, Phone, Briefcase, Building2, Calendar, User, Key, Lock, Eye, EyeOff } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Card, Button, Input, Textarea, Select, Pill, Eyebrow, Divider, Avatar, fmtDate } from '../components/ui';
-import { authApi } from '../api';
+import { authApi, attendanceApi } from '../api';
 import { STATUS_PRESETS, getPresence, getStatusText } from '../utils/presence';
 const DEPARTMENTS = ['Engineering', 'Operations', 'Marketing', 'Leadership', 'Design', 'Sales'];
 const LEAVE_TYPES = [
@@ -31,6 +31,7 @@ export default function Profile() {
   const [pwSaving, setPwSaving] = useState(false);
   const [pwError, setPwError] = useState('');
   const [showPw, setShowPw] = useState({ current: false, next: false, confirm: false });
+  const [attendanceStats, setAttendanceStats] = useState([]);
 
   useEffect(() => {
     if (!editing && profileUser) {
@@ -40,6 +41,26 @@ export default function Profile() {
 
   useEffect(() => {
     setEditing(false);
+  }, [profileUser?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!profileUser?.id) {
+      setAttendanceStats([]);
+      return undefined;
+    }
+
+    attendanceApi.userHistory(profileUser.id, { days: 30 })
+      .then((records) => {
+        if (!cancelled) setAttendanceStats(records);
+      })
+      .catch(() => {
+        if (!cancelled) setAttendanceStats([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [profileUser?.id]);
 
   async function handleChangePassword(e) {
@@ -86,7 +107,7 @@ export default function Profile() {
   myLeaves.forEach(l => { myUsage[l.type] = (myUsage[l.type] || 0) + (l.days || 0); });
 
   const myTasks = tasks.filter(t => t.assigneeId === profileUser.id);
-  const myAttendance = attendance.filter(a => a.userId === profileUser.id);
+  const myAttendance = attendanceStats.length ? attendanceStats : attendance.filter(a => a.userId === profileUser.id);
   const presentDays = myAttendance.filter(a => a.status === 'Present').length;
 
   async function handlePhotoChange(e) {

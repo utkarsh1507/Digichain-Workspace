@@ -8,6 +8,18 @@ const ROLES = ['founder', 'employee', 'intern'];
 const DEPARTMENTS = ['Engineering', 'Operations', 'Marketing', 'Leadership', 'Design', 'Sales'];
 const PASSWORD_HINT = 'Use at least 10 characters with uppercase, lowercase, and a number.';
 
+function getIstDateString(date = new Date()) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-IN', {
+      timeZone: 'Asia/Kolkata',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(date).map((part) => [part.type, part.value])
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
 function createMemberForm() {
   return {
     name: '',
@@ -65,7 +77,7 @@ export default function AdminPanel() {
   const [editUser, setEditUser] = useState(null);
   const [form, setForm] = useState(createMemberForm);
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = getIstDateString();
   const presentToday = users.filter(u => attendance.find(a => a.userId === u.id && a.date === today && ['Present', 'Remote'].includes(a.status)));
   const pendingLeaves = leaves.filter(l => l.status === 'Pending');
 

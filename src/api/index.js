@@ -26,6 +26,17 @@ function getToken() {
   return localStorage.getItem('dw_token');
 }
 
+function buildQuery(params = {}) {
+  const search = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      search.set(key, String(value));
+    }
+  });
+  const query = search.toString();
+  return query ? `?${query}` : '';
+}
+
 async function req(method, path, body, isFormData = false) {
   const headers = {};
   const token = getToken();
@@ -44,6 +55,36 @@ async function req(method, path, body, isFormData = false) {
     throw new ApiError(msg, res.status);
   }
   return res.json();
+}
+
+async function downloadFile(path, params = {}) {
+  const headers = {};
+  const token = getToken();
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE}${path}${buildQuery(params)}`, {
+    method: 'GET',
+    headers,
+  });
+
+  if (!res.ok) {
+    let msg = 'Request failed';
+    try { const j = await res.json(); msg = j.error || msg; } catch {}
+    throw new ApiError(msg, res.status);
+  }
+
+  const blob = await res.blob();
+  const disposition = res.headers.get('content-disposition') || '';
+  const filenameMatch = disposition.match(/filename=\"?([^"]+)\"?/i);
+  const filename = filenameMatch?.[1] || 'download.csv';
+  const url = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(url);
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -71,6 +112,9 @@ export const usersApi = {
 export const attendanceApi = {
   list: () => req('GET', '/attendance'),
   today: () => req('GET', '/attendance/today'),
+  history: (params) => req('GET', `/attendance/history${buildQuery(params)}`),
+  userHistory: (userId, params) => req('GET', `/attendance/users/${userId}${buildQuery(params)}`),
+  downloadHistory: (params) => downloadFile('/attendance/history/export', params),
   signIn: (location) => req('POST', '/attendance/signin', { location }),
   signOut: () => req('POST', '/attendance/signout'),
   resetToday: () => req('DELETE', '/attendance/today'),

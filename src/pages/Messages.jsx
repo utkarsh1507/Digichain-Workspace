@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Hash, Plus, Send, Paperclip, Search, Users, X, File, Image, CheckCheck, Smile, Trash2 } from 'lucide-react';
+import { Hash, Plus, Send, Paperclip, Search, Users, X, File, Image, CheckCheck, Smile, Trash2, Download } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar, IconBtn, Button, Empty, Modal, Input, fmtTime } from '../components/ui';
 import { messagesApi } from '../api/index.js';
@@ -526,16 +526,31 @@ export default function Messages() {
                                 style={{ maxWidth: 280, maxHeight: 200, borderRadius: 10, objectFit: 'cover', cursor: 'pointer', border: '1px solid var(--border-1)' }}
                                 onClick={() => window.open(m.attachmentUrl, '_blank')} />
                             ) : (
-                              <a href={m.attachmentUrl} target="_blank" rel="noreferrer" download={m.attachmentName}
-                                style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
-                                  borderRadius: 10, border: '1px solid var(--border-1)', background: '#fff',
-                                  textDecoration: 'none', color: 'var(--fg-1)', maxWidth: 260 }}>
-                                <File size={18} color="var(--accent)" />
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+                                borderRadius: 10, border: '1px solid var(--border-1)', background: '#fff',
+                                maxWidth: 280 }}>
+                                <File size={18} color="var(--accent)" style={{ flexShrink: 0 }} />
                                 <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.attachmentName}</div>
-                                  <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>Click to download</div>
+                                  <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--fg-1)' }}>{m.attachmentName}</div>
+                                  <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>File attachment</div>
                                 </div>
-                              </a>
+                                <button
+                                  title="Download"
+                                  onClick={() => {
+                                    fetch(m.attachmentUrl)
+                                      .then(r => r.blob())
+                                      .then(blob => {
+                                        const a = document.createElement('a');
+                                        a.href = URL.createObjectURL(blob);
+                                        a.download = m.attachmentName || 'download';
+                                        a.click();
+                                        URL.revokeObjectURL(a.href);
+                                      });
+                                  }}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--accent)', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
+                                  <Download size={16} />
+                                </button>
+                              </div>
                             )
                           )}
 
