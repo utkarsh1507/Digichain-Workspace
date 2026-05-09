@@ -537,15 +537,7 @@ export default function Messages() {
                                 <button
                                   title="Download"
                                   onClick={() => {
-                                    fetch(m.attachmentUrl)
-                                      .then(r => r.blob())
-                                      .then(blob => {
-                                        const a = document.createElement('a');
-                                        a.href = URL.createObjectURL(blob);
-                                        a.download = m.attachmentName || 'download';
-                                        a.click();
-                                        URL.revokeObjectURL(a.href);
-                                      });
+                                    window.open(m.attachmentUrl, '_blank', 'noopener,noreferrer');
                                   }}
                                   style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, color: 'var(--accent)', flexShrink: 0, display: 'flex', alignItems: 'center' }}>
                                   <Download size={16} />

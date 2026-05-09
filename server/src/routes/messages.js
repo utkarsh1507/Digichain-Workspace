@@ -1,7 +1,11 @@
 const router = require('express').Router();
 const { PrismaClient, Prisma } = require('@prisma/client');
 const auth = require('../middleware/auth');
-const { uploadMessage: uploadFile } = require('../lib/cloudinary');
+const {
+  uploadMessage: uploadFile,
+  getUploadedFileUrl,
+  normalizeStoredFileUrl,
+} = require('../lib/cloudinary');
 const { broadcast } = require('../lib/events');
 const prisma = new PrismaClient();
 
@@ -28,6 +32,14 @@ function parseMemberIds(memberIds) {
 
 function parseChannel(c) {
   return { ...c, memberIds: parseMemberIds(c.memberIds) };
+}
+
+function normalizeMessageAttachment(message) {
+  if (!message?.attachmentUrl) return message;
+  return {
+    ...message,
+    attachmentUrl: normalizeStoredFileUrl(message.attachmentUrl, message.attachmentName),
+  };
 }
 
 function isChannelMember(channel, userId) {
@@ -148,7 +160,7 @@ router.get('/channels/:id/messages', auth, async (req, res) => {
     seenRecords.forEach(r => { seenBy[r.userId] = r.lastReadAt; });
 
     res.json({
-      messages: messages.map(m => ({ ...m, reactions: JSON.parse(m.reactions || '[]') })),
+      messages: messages.map(m => normalizeMessageAttachment({ ...m, reactions: JSON.parse(m.reactions || '[]') })),
       seenBy,
     });
   } catch (err) {
@@ -182,7 +194,7 @@ router.post('/channels/:id/upload', auth, uploadFile.single('file'), async (req,
     if (!channel) return;
 
     if (!req.file) return res.status(400).json({ error: 'No file' });
-    const attachmentUrl = req.file.path; // Cloudinary permanent URL
+    const attachmentUrl = getUploadedFileUrl(req.file); // Cloudinary permanent URL
     const isImage = req.file.mimetype.startsWith('image/');
     const msg = await prisma.message.create({
       data: {
@@ -195,7 +207,7 @@ router.post('/channels/:id/upload', auth, uploadFile.single('file'), async (req,
       },
       include: msgInclude,
     });
-    const payload = { ...msg, reactions: [] };
+    const payload = normalizeMessageAttachment({ ...msg, reactions: [] });
     broadcast('message:new', payload, parseMemberIds(channel.memberIds));
     res.json(payload);
   } catch (err) {

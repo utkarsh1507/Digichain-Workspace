@@ -151,7 +151,7 @@ export default function Documents() {
                   <span style={{ fontSize: 12, color: 'var(--fg-3)' }}>{fmtDate(d.uploadedAt || d.createdAt)}</span>
                   <div style={{ display: 'flex', gap: 4 }}>
                     {d.url && d.url !== '#' && (
-                      <a href={d.url} download target="_blank" rel="noreferrer" style={{ display: 'inline-flex', textDecoration: 'none' }}>
+                      <a href={d.url} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', textDecoration: 'none' }}>
                         <IconBtn icon={Download} size={28} title="Download" />
                       </a>
                     )}

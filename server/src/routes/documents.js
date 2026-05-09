@@ -2,7 +2,11 @@ const router = require('express').Router();
 const path = require('path');
 const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
-const { uploadDocument: uploadDoc } = require('../lib/cloudinary');
+const {
+  uploadDocument: uploadDoc,
+  getUploadedFileUrl,
+  normalizeStoredFileUrl,
+} = require('../lib/cloudinary');
 const { broadcast } = require('../lib/events');
 const prisma = new PrismaClient();
 
@@ -13,7 +17,10 @@ router.get('/', auth, async (req, res) => {
       orderBy: { uploadedAt: 'desc' },
       include: { uploader: { select: { id: true, name: true, avatar: true } } }
     });
-    res.json(documents);
+    res.json(documents.map((doc) => ({
+      ...doc,
+      url: normalizeStoredFileUrl(doc.url, doc.name),
+    })));
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
@@ -43,14 +50,18 @@ router.post('/upload', auth, uploadDoc.single('file'), async (req, res) => {
         type: fileType,
         size: fileSize,
         folder: folder || 'General',
-        url: req.file.path, // Cloudinary permanent URL
+        url: getUploadedFileUrl(req.file), // Cloudinary permanent URL
         description: description || null,
         uploaderId: req.user.id,
       },
       include: { uploader: { select: { id: true, name: true, avatar: true } } }
     });
-    broadcast('document:new', document);
-    res.json(document);
+    const normalizedDocument = {
+      ...document,
+      url: normalizeStoredFileUrl(document.url, document.name),
+    };
+    broadcast('document:new', normalizedDocument);
+    res.json(normalizedDocument);
   } catch (err) {
     res.status(500).json({ error: 'Server error' });
   }
