@@ -41,6 +41,12 @@ function buildPublicId(filename) {
   return `${Date.now()}-${sanitizePublicIdPart(filename)}`;
 }
 
+function buildRawPublicId(filename) {
+  const ext = getFileExtension(filename);
+  const base = buildPublicId(filename);
+  return ext ? `${base}.${ext}` : base;
+}
+
 function normalizePublicId(publicId, format) {
   if (!publicId || !format) return publicId;
   const suffix = `.${format.toLowerCase()}`;
@@ -55,7 +61,9 @@ function getUploadedFileUrl(file, fallbackName) {
   const originalName = file.originalname || fallbackName || '';
   const format = (file.format || getFileExtension(originalName) || '').toLowerCase();
   const resourceType = file.resource_type || (file.mimetype?.startsWith('image/') ? 'image' : 'raw');
-  const publicId = normalizePublicId(file.filename || file.public_id, format);
+  const publicId = resourceType === 'raw'
+    ? (file.filename || file.public_id)
+    : normalizePublicId(file.filename || file.public_id, format);
 
   if (!publicId) return file.path || file.secure_url || null;
 
@@ -63,7 +71,7 @@ function getUploadedFileUrl(file, fallbackName) {
     secure: true,
     resource_type: resourceType,
     type: 'upload',
-    format: format || undefined,
+    format: resourceType === 'raw' ? undefined : (format || undefined),
   });
 }
 
@@ -94,14 +102,16 @@ function parseCloudinaryAsset(url, fallbackName) {
 
     const source = decodeURIComponent(sourceParts.join('/'));
     const format = getFileExtension(fallbackName || source);
-    const publicId = format ? source.replace(new RegExp(`\\.${format}$`, 'i'), '') : source;
+    const publicId = resourceType === 'raw'
+      ? source
+      : (format ? source.replace(new RegExp(`\\.${format}$`, 'i'), '') : source);
 
     if (!publicId) return null;
 
     return {
       resourceType,
       publicId,
-      format: format || undefined,
+      format: resourceType === 'raw' ? undefined : (format || undefined),
     };
   } catch {
     return null;
@@ -133,13 +143,11 @@ const messageStorage = new CloudinaryStorage({
   cloudinary,
   params: (req, file) => {
     const isImage = file.mimetype.startsWith('image/');
-    const format = getFileExtension(file.originalname);
 
     return {
       folder: 'digichain/messages',
       resource_type: isImage ? 'image' : 'raw',
-      public_id: isImage ? undefined : buildPublicId(file.originalname),
-      format: !isImage && format ? format : undefined,
+      public_id: isImage ? undefined : buildRawPublicId(file.originalname),
       use_filename: false,
       unique_filename: false,
     };
@@ -151,8 +159,7 @@ const documentStorage = new CloudinaryStorage({
   params: (req, file) => ({
     folder: 'digichain/documents',
     resource_type: 'raw',
-    public_id: buildPublicId(file.originalname),
-    format: getFileExtension(file.originalname) || undefined,
+    public_id: buildRawPublicId(file.originalname),
     use_filename: false,
     unique_filename: false,
   }),
