@@ -50,8 +50,18 @@ const RECURRING_OPTIONS = [
   { value: 'daily', label: 'Every day', hint: 'Keeps the same Meet link and time active each day.' },
 ];
 
+function parseDateString(value) {
+  if (!value) return null;
+  const [year, month, day] = value.split('-').map(Number);
+  return new Date(year, (month || 1) - 1, day || 1);
+}
+
 function formatDateValue(date) {
-  return date.toISOString().split('T')[0];
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0'),
+  ].join('-');
 }
 
 function addDays(baseDate, offset) {
@@ -62,7 +72,9 @@ function addDays(baseDate, offset) {
 
 function getDisplayDateLabel(value) {
   if (!value) return 'Pick a date';
-  return new Date(`${value}T00:00:00`).toLocaleDateString('en-IN', {
+  const date = parseDateString(value);
+  if (!date) return 'Pick a date';
+  return date.toLocaleDateString('en-IN', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
@@ -365,6 +377,8 @@ function MeetingForm({
   onCancel,
   submitLabel,
 }) {
+  const showDatePicker = form.recurring !== 'daily';
+
   function toggleAttendee(userId) {
     setForm((current) => ({
       ...current,
@@ -393,8 +407,28 @@ function MeetingForm({
 
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 14 }}>
         <div>
-          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', display: 'block', marginBottom: 8 }}>Start date</span>
-          <CalendarPicker value={form.date} onChange={(date) => setForm((current) => ({ ...current, date }))} minDate={todayStr} />
+          {showDatePicker ? (
+            <>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', display: 'block', marginBottom: 8 }}>Start date</span>
+              <CalendarPicker value={form.date} onChange={(date) => setForm((current) => ({ ...current, date }))} minDate={todayStr} />
+            </>
+          ) : (
+            <Card style={{ padding: 18, minHeight: '100%', background: 'linear-gradient(160deg, rgba(92,201,245,0.1), rgba(123,97,255,0.08), #fff)' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <RotateCcw size={16} color="var(--accent)" />
+                  <span style={{ fontSize: 13, fontWeight: 700 }}>Daily meeting</span>
+                </div>
+                <span style={{ fontSize: 12, color: 'var(--fg-3)', lineHeight: 1.5 }}>
+                  No date needed here. This meeting will appear every day at the selected time.
+                </span>
+                <Pill tone="accent">Starts from today</Pill>
+                <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)' }}>
+                  {getDisplayDateLabel(todayStr)}
+                </span>
+              </div>
+            </Card>
+          )}
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
           <Card style={{ padding: 16, background: 'linear-gradient(180deg, rgba(123,97,255,0.06), #fff)' }}>
@@ -502,7 +536,7 @@ export default function Meetings() {
   const [editMeetingId, setEditMeetingId] = useState(null);
   const [form, setForm] = useState(() => createInitialForm(currentUser));
 
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = formatDateValue(new Date());
   const myMeetings = meetings.filter((meeting) =>
     (meeting.attendeeIds || []).includes(currentUser?.id) || meeting.organizerId === currentUser?.id
   );
@@ -539,11 +573,11 @@ export default function Meetings() {
   }
 
   function validateForm() {
-    if (!form.date) {
+    if (form.recurring !== 'daily' && !form.date) {
       alert('Please select a start date.');
       return false;
     }
-    if (form.date < todayStr) {
+    if (form.recurring !== 'daily' && form.date < todayStr) {
       alert('Cannot schedule or move a meeting to a past date.');
       return false;
     }
@@ -565,6 +599,7 @@ export default function Meetings() {
     try {
       await createMeeting({
         ...form,
+        date: form.recurring === 'daily' ? todayStr : form.date,
         meetLink: normalizeMeetLink(form.meetLink),
         recurring: form.recurring === 'daily' ? 'daily' : null,
       });
@@ -581,6 +616,7 @@ export default function Meetings() {
     try {
       await updateMeeting(editingMeeting.id, {
         ...form,
+        date: form.recurring === 'daily' ? (editingMeeting.date || todayStr) : form.date,
         meetLink: normalizeMeetLink(form.meetLink),
         recurring: form.recurring === 'daily' ? 'daily' : null,
       });
