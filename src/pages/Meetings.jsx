@@ -648,15 +648,15 @@ export default function Meetings() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <RotateCcw size={16} color="var(--accent)" />
-              <span style={{ fontSize: 14, fontWeight: 700 }}>Recurring meetings stay active</span>
+              <span style={{ fontSize: 14, fontWeight: 700 }}>Create a daily meet or instant meet</span>
             </div>
             <span style={{ fontSize: 12, color: 'var(--fg-3)' }}>
-              Daily meetings remain in Upcoming and never move into Past automatically. One-time meetings stay in Past for only 7 days.
+              Pick the format that fits your team and schedule it in seconds.
             </span>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <Pill tone="accent">Daily stays visible</Pill>
-            <Pill tone="info">Past retained for 1 week</Pill>
+            <Pill tone="accent">Daily meet</Pill>
+            <Pill tone="info">Instant meet</Pill>
           </div>
         </div>
       </Card>
