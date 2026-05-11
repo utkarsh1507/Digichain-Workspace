@@ -21,6 +21,14 @@ export function isPastMeeting(meeting, today) {
   return !isDailyMeeting(meeting) && (meeting?.date || '') < today;
 }
 
+export function isPastMeetingWithinRetention(meeting, today, retentionDays = 7) {
+  if (!isPastMeeting(meeting, today)) return false;
+  const meetingDate = new Date(`${meeting.date}T00:00:00`);
+  const todayDate = new Date(`${today}T00:00:00`);
+  const diffDays = Math.floor((todayDate.getTime() - meetingDate.getTime()) / 86400000);
+  return diffDays <= retentionDays;
+}
+
 export function sortMeetingsByNextOccurrence(meetings, today) {
   return [...meetings].sort((a, b) => {
     const dateCompare = getMeetingOccurrenceDate(a, today).localeCompare(getMeetingOccurrenceDate(b, today));

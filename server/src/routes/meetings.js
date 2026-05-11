@@ -33,10 +33,24 @@ function getErrorStatus(message = '') {
   return /required|valid/i.test(message) ? 400 : 500;
 }
 
+function getDateStringWithOffset(offsetDays = 0) {
+  const date = new Date();
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + offsetDays);
+  return date.toISOString().split('T')[0];
+}
+
 // GET /api/meetings
 router.get('/', auth, async (req, res) => {
   try {
+    const retentionStart = getDateStringWithOffset(-7);
     const meetings = await prisma.meeting.findMany({
+      where: {
+        OR: [
+          { recurring: 'daily' },
+          { date: { gte: retentionStart } },
+        ],
+      },
       orderBy: { date: 'asc' },
       include
     });
