@@ -124,6 +124,9 @@ model Message {
   attachmentType String?
   reactions      String   @default("[]")
   timestamp      DateTime @default(now())
+
+  @@index([channelId, timestamp])
+  @@index([senderId, timestamp])
 }
 
 model Announcement {
@@ -174,4 +177,5 @@ model ChannelRead {
   lastReadAt DateTime @default(now())
 
   @@unique([channelId, userId])
+  @@index([userId, lastReadAt])
 }

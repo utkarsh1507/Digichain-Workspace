@@ -13,17 +13,21 @@ const EMOJIS = ['👍', '❤️', '🔥', '🚀', '✅', '😂', '😮', '👏']
 export default function Messages() {
   const {
     state, loadMessages, sendMessage, sendFile, reactToMessage, deleteMessage,
-    ensureDm, createChannel, updateChannelMembers, deleteChannel, markChannelRead, setActiveChannel,
+    ensureDm, createChannel, updateChannel, updateChannelMembers, deleteChannel, markChannelRead, setActiveChannel,
   } = useApp();
   const { currentUser, channels, channelMessages, channelSeenBy, users, typingByChannel } = state;
   const navigate = useNavigate();
 
   const [activeId, setActiveId] = useState(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [chatSearchQuery, setChatSearchQuery] = useState('');
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [newChannelOpen, setNewChannelOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const [channelForm, setChannelForm] = useState({ name: '', description: '', emoji: CHANNEL_ICON_OPTIONS[0].value, memberIds: [] });
+  const [channelSettingsEmoji, setChannelSettingsEmoji] = useState(CHANNEL_ICON_OPTIONS[0].value);
+  const [savingChannelSettings, setSavingChannelSettings] = useState(false);
   const [updatingMembers, setUpdatingMembers] = useState(false);
   const [attachedFile, setAttachedFile] = useState(null);
   const [pickerForMsgId, setPickerForMsgId] = useState(null);
@@ -38,10 +42,12 @@ export default function Messages() {
   // Separate channels and DMs
   const myChannels = channels.filter(c => c.type === 'channel');
   const myDMs = channels.filter(c => c.type === 'dm');
+  const normalizedSearch = searchQuery.trim().toLowerCase();
   const conversations = [...myChannels, ...myDMs];
 
   const active = channels.find(c => c.id === activeId);
   const activeMsgs = channelMessages[activeId] || [];
+  const normalizedChatSearch = chatSearchQuery.trim().toLowerCase();
   const activeSeenBy = channelSeenBy[activeId] || {};
   const now = Date.now();
   const activeOtherUser = getDMOtherUser(active);
@@ -58,6 +64,9 @@ export default function Messages() {
     active.type === 'dm'
       ? (active.memberIds || []).includes(currentUser?.id)
       : active.createdById === currentUser?.id || currentUser?.role === 'founder'
+  );
+  const canEditActiveChannel = !!active && active.type === 'channel' && (
+    active.createdById === currentUser?.id || currentUser?.role === 'founder'
   );
 
   // Compute typing names from SSE-driven state, only those updated within last 4s
@@ -129,6 +138,12 @@ export default function Messages() {
     return () => document.removeEventListener('click', onDocClick);
   }, [pickerForMsgId]);
 
+  useEffect(() => {
+    if (membersOpen && active?.type === 'channel') {
+      setChannelSettingsEmoji(getChannelEmoji(active));
+    }
+  }, [membersOpen, active?.id, active?.emoji, active?.type]);
+
   // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -181,6 +196,40 @@ export default function Messages() {
     return `${senderName}: ${last.text || '…'}`;
   }
 
+  const filteredChannels = normalizedSearch
+    ? myChannels.filter((channel) => {
+        const name = getConvName(channel).toLowerCase();
+        const description = (channel.description || '').toLowerCase();
+        const last = getLastMsg(channel.id).toLowerCase();
+        return name.includes(normalizedSearch) || description.includes(normalizedSearch) || last.includes(normalizedSearch);
+      })
+    : myChannels;
+
+  const filteredDMs = normalizedSearch
+    ? myDMs.filter((channel) => {
+        const name = getConvName(channel).toLowerCase();
+        const last = getLastMsg(channel.id).toLowerCase();
+        return name.includes(normalizedSearch) || last.includes(normalizedSearch);
+      })
+    : myDMs;
+
+  const visibleActiveMsgs = normalizedChatSearch
+    ? activeMsgs.filter((message) => {
+        const senderName = getSenderName(message).toLowerCase();
+        const attachmentName = (message.attachmentName || '').toLowerCase();
+        const messageText = (message.text || '').toLowerCase();
+        const dayLabel = getDayDividerLabel(message.timestamp).toLowerCase();
+        const timeLabel = fmtTime(message.timestamp).toLowerCase();
+        return (
+          senderName.includes(normalizedChatSearch) ||
+          attachmentName.includes(normalizedChatSearch) ||
+          messageText.includes(normalizedChatSearch) ||
+          dayLabel.includes(normalizedChatSearch) ||
+          timeLabel.includes(normalizedChatSearch)
+        );
+      })
+    : activeMsgs;
+
   async function handleSwitchChannel(id) {
     setActiveId(id);
     setAttachedFile(null);
@@ -188,7 +237,6 @@ export default function Messages() {
     if (!channelMessages[id]) {
       await loadMessages(id).catch(() => {});
     }
-    markChannelRead(id);
   }
 
   async function handleSend(e) {
@@ -220,7 +268,6 @@ export default function Messages() {
       if (!channelMessages[channel.id]) {
         await loadMessages(channel.id).catch(() => {});
       }
-      markChannelRead(channel.id);
     } catch (err) {
       alert(err.message);
     }
@@ -302,6 +349,18 @@ export default function Messages() {
     }
   }
 
+  async function handleSaveChannelIcon() {
+    if (!active || active.type !== 'channel' || !canEditActiveChannel || savingChannelSettings) return;
+    setSavingChannelSettings(true);
+    try {
+      await updateChannel(active.id, { emoji: channelSettingsEmoji });
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setSavingChannelSettings(false);
+    }
+  }
+
   function handleFileSelect(e) {
     const file = e.target.files[0];
     if (file) setAttachedFile(file);
@@ -351,6 +410,32 @@ export default function Messages() {
     ));
   }
 
+  function getMessageDayKey(timestamp) {
+    const date = new Date(timestamp);
+    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+  }
+
+  function getDayDividerLabel(timestamp) {
+    const target = new Date(timestamp);
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfTarget = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+    const diffDays = Math.round((startOfToday - startOfTarget) / 86400000);
+
+    if (diffDays === 0) return 'Today';
+    if (diffDays === 1) return 'Yesterday';
+
+    return target.toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: startOfToday.getFullYear() === startOfTarget.getFullYear() ? undefined : 'numeric',
+    });
+  }
+
+  function getMessageTimestampLabel(timestamp) {
+    return `${getDayDividerLabel(timestamp)} at ${fmtTime(timestamp)}`;
+  }
+
   return (
     <div style={{
       display: 'grid',
@@ -371,7 +456,7 @@ export default function Messages() {
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
             background: 'var(--bg-2)', borderRadius: 8 }}>
             <Search size={13} color="var(--fg-3)" />
-            <input placeholder="Search conversations…" style={{ flex: 1, border: 'none', background: 'transparent',
+            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search conversations..." style={{ flex: 1, border: 'none', background: 'transparent',
               outline: 'none', fontFamily: 'inherit', fontSize: 12, color: 'var(--fg-1)' }} />
           </div>
         </div>
@@ -386,7 +471,7 @@ export default function Messages() {
               <Plus size={13} />
             </button>
           </div>
-          {myChannels.map(c => (
+          {filteredChannels.map(c => (
             <ConvItem key={c.id} conv={c} active={c.id === activeId}
               name={getConvName(c)} last={getLastMsg(c.id)}
               unread={state.unreadCounts?.[c.id] || 0}
@@ -397,7 +482,7 @@ export default function Messages() {
           <div style={{ padding: '12px 6px 4px' }}>
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', color: 'var(--fg-4)' }}>Direct Messages</span>
           </div>
-          {myDMs.map(d => (
+          {filteredDMs.map(d => (
             <ConvItem key={d.id} conv={d} active={d.id === activeId}
               name={getConvName(d)} last={getLastMsg(d.id)}
               avatar={getConvAvatar(d)}
@@ -410,7 +495,7 @@ export default function Messages() {
           <div style={{ padding: '12px 6px 4px' }}>
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', color: 'var(--fg-4)' }}>New DM</span>
           </div>
-          {users.filter(u => u.id !== currentUser?.id).map(u => (
+          {users.filter(u => u.id !== currentUser?.id && (!normalizedSearch || u.name.toLowerCase().includes(normalizedSearch))).map(u => (
             <div key={u.id} onClick={() => handleDMUser(u.id)}
               style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 8, cursor: 'pointer' }}
               onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-3)'}
@@ -461,6 +546,42 @@ export default function Messages() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  padding: '6px 10px',
+                  background: 'var(--bg-1)',
+                  border: '1px solid var(--border-1)',
+                  borderRadius: 10,
+                  minWidth: 220,
+                }}>
+                  <Search size={13} color="var(--fg-3)" />
+                  <input
+                    value={chatSearchQuery}
+                    onChange={e => setChatSearchQuery(e.target.value)}
+                    placeholder="Search in chat..."
+                    style={{
+                      flex: 1,
+                      border: 'none',
+                      background: 'transparent',
+                      outline: 'none',
+                      fontFamily: 'inherit',
+                      fontSize: 12,
+                      color: 'var(--fg-1)',
+                    }}
+                  />
+                  {chatSearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setChatSearchQuery('')}
+                      style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: 0, color: 'var(--fg-3)' }}
+                      aria-label="Clear chat search"
+                      title="Clear chat search">
+                      <X size={13} />
+                    </button>
+                  )}
+                </div>
                 {active.type === 'channel' && <IconBtn icon={Users} title="Members" onClick={() => setMembersOpen(true)} />}
                 {canDeleteActive && (
                   <Button
@@ -479,12 +600,17 @@ export default function Messages() {
             <div style={{ flex: 1, overflowY: 'auto', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 2 }}>
               {activeMsgs.length === 0
                 ? <Empty icon={Hash} title="No messages yet" hint="Be the first to say something!" />
-                : activeMsgs.map((m, i) => {
-                  const prev = i > 0 ? activeMsgs[i - 1] : null;
+                : visibleActiveMsgs.length === 0
+                ? <Empty icon={Search} title="No matching messages" hint={`No messages found for "${chatSearchQuery}".`} />
+                : visibleActiveMsgs.map((m, i) => {
+                  const prev = i > 0 ? visibleActiveMsgs[i - 1] : null;
+                  const next = i < visibleActiveMsgs.length - 1 ? visibleActiveMsgs[i + 1] : null;
                   const senderId = getSenderId(m);
                   const isMe = senderId === currentUser?.id;
                   const senderName = getSenderName(m);
                   const grouped = prev && getSenderId(prev) === senderId;
+                  const isGroupEnd = !next || getSenderId(next) !== senderId || getMessageDayKey(next.timestamp) !== getMessageDayKey(m.timestamp);
+                  const showDayDivider = !prev || getMessageDayKey(prev.timestamp) !== getMessageDayKey(m.timestamp);
                   const isLastSeenMsg = m.id === lastSeenMsgId;
                   const messageText = m.text || '';
 
@@ -495,6 +621,13 @@ export default function Messages() {
                   return (
                     <div key={m.id} className="message-row" style={{ display: 'flex', flexDirection: 'column',
                       alignItems: isMe ? 'flex-end' : 'flex-start', marginTop: grouped ? 2 : 12, position: 'relative' }}>
+                      {showDayDivider && (
+                        <div style={{ width: '100%', display: 'flex', justifyContent: 'center', margin: '10px 0 4px' }}>
+                          <span style={{ padding: '5px 12px', borderRadius: 999, background: 'var(--bg-2)', border: '1px solid var(--border-1)', fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', color: 'var(--fg-3)' }}>
+                            {getDayDividerLabel(m.timestamp)}
+                          </span>
+                        </div>
+                      )}
                       <div style={{ display: 'flex', gap: 10, justifyContent: isMe ? 'flex-end' : 'flex-start',
                         position: 'relative', width: '100%' }}>
                         {!isMe && (
@@ -560,7 +693,6 @@ export default function Messages() {
                           {!grouped && !isMe && (
                             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                               <span style={{ fontSize: 12, fontWeight: 600 }}>{senderName}</span>
-                              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)' }}>{fmtTime(m.timestamp)}</span>
                             </div>
                           )}
 
@@ -600,10 +732,10 @@ export default function Messages() {
                             </div>
                           )}
 
-                          {/* Time for my messages */}
-                          {isMe && !grouped && (
+                          {/* Timestamp at the end of each sender group for better message separation */}
+                          {isGroupEnd && (
                             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, color: 'var(--fg-4)' }}>
-                              {fmtTime(m.timestamp)}
+                              {getMessageTimestampLabel(m.timestamp)}
                             </span>
                           )}
 
@@ -838,6 +970,44 @@ export default function Messages() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
             <div>
               <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-3)', marginBottom: 10 }}>
+                Channel Icon
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
+                {CHANNEL_ICON_OPTIONS.map((option) => {
+                  const isActive = channelSettingsEmoji === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      disabled={!canEditActiveChannel}
+                      onClick={() => setChannelSettingsEmoji(option.value)}
+                      style={{
+                        border: isActive ? '1px solid var(--accent)' : '1px solid var(--border-1)',
+                        background: isActive ? 'var(--accent-tint)' : '#fff',
+                        borderRadius: 12,
+                        padding: '10px 8px',
+                        cursor: canEditActiveChannel ? 'pointer' : 'not-allowed',
+                        opacity: canEditActiveChannel ? 1 : 0.6,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}>
+                      <span style={{ fontSize: 20, lineHeight: 1 }}>{option.value}</span>
+                      <span style={{ fontSize: 11, color: isActive ? 'var(--accent-press)' : 'var(--fg-3)' }}>{option.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
+                <Button variant="secondary" size="sm" onClick={handleSaveChannelIcon} disabled={!canEditActiveChannel || savingChannelSettings || channelSettingsEmoji === getChannelEmoji(active)}>
+                  {savingChannelSettings ? 'Saving...' : 'Update Icon'}
+                </Button>
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-3)', marginBottom: 10 }}>
                 Current Members
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
@@ -899,6 +1069,11 @@ export default function Messages() {
             <div style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--bg-1)', fontSize: 12, color: 'var(--fg-3)' }}>
               Any channel member can add people. Removing members is allowed only for admin, or for the channel creator when no admin is part of the channel.
             </div>
+            {!canEditActiveChannel && (
+              <div style={{ padding: '10px 12px', borderRadius: 10, background: '#fff8eb', fontSize: 12, color: '#9a6400' }}>
+                Only the channel creator or admin can change the channel icon.
+              </div>
+            )}
           </div>
         )}
       </Modal>
@@ -938,3 +1113,4 @@ function ConvItem({ conv, active, name, last, unread, onClick, avatar, user }) {
     </div>
   );
 }
+

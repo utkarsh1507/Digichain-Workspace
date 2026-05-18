@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, CheckSquare, MessageSquare, Calendar, Clock,
   PalmtreeIcon, Folder, Megaphone, User, Users, LogOut,
-  Bell, Settings, Search, ChevronUp, Video,
+  Bell, Settings, ChevronUp, Video,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
 import { Avatar, IconBtn, NotificationToast, Modal, Button } from '../ui';
@@ -78,7 +78,6 @@ export function Shell({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [profileOpen, setProfileOpen] = useState(false);
-  const [searchVal, setSearchVal] = useState('');
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [showNotifyPrompt, setShowNotifyPrompt] = useState(false);
   const [statusDraft, setStatusDraft] = useState({ statusPreset: 'working', statusMessage: '' });
@@ -325,14 +324,6 @@ export function Shell({ children }) {
           display: 'flex', alignItems: 'center', gap: 14, padding: '0 24px',
           position: 'sticky', top: 0, zIndex: 10 }}>
           <div style={{ flex: 1 }} />
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px',
-            background: 'var(--bg-2)', borderRadius: 10, width: 300 }}>
-            <Search size={14} color="var(--fg-3)" />
-            <input value={searchVal} onChange={e => setSearchVal(e.target.value)}
-              placeholder="Search tasks, people, documents…"
-              style={{ flex: 1, border: 'none', background: 'transparent', outline: 'none',
-                fontFamily: 'inherit', fontSize: 13, color: 'var(--fg-1)' }} />
-          </div>
           <IconBtn
             icon={Bell}
             badge={totalUnread + (currentUser?.role === 'founder' ? pendingLeaves : 0)}
@@ -394,3 +385,4 @@ export function Shell({ children }) {
     </div>
   );
 }
+

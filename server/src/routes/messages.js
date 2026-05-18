@@ -155,6 +155,37 @@ router.post('/channels', auth, async (req, res) => {
 });
 
 // GET /api/channels/:id/messages — returns { messages, seenBy }
+// PATCH /api/channels/:id
+router.patch('/channels/:id', auth, async (req, res) => {
+  try {
+    const channel = await requireChannelAccess(req.params.id, req.user.id, res);
+    if (!channel) return;
+    if (channel.type !== 'channel') return res.status(400).json({ error: 'Only channels can be updated' });
+
+    const canEditChannel = channel.createdById === req.user.id || req.user.role === 'founder';
+    if (!canEditChannel) {
+      return res.status(403).json({ error: 'Only the channel creator or admin can update this channel' });
+    }
+
+    const data = {};
+    if (typeof req.body?.emoji === 'string' && req.body.emoji.trim()) data.emoji = req.body.emoji.trim();
+    if (typeof req.body?.description === 'string') data.description = req.body.description.trim() || null;
+    if (!Object.keys(data).length) return res.status(400).json({ error: 'No valid updates provided' });
+
+    const updated = await prisma.channel.update({
+      where: { id: channel.id },
+      data,
+    });
+    channelCache[channel.id] = { channel: updated, expiry: Date.now() + CHANNEL_CACHE_TTL };
+    const parsed = parseChannel(updated);
+    broadcast('channel:update', parsed, parseMemberIds(updated.memberIds));
+    res.json(parsed);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 router.get('/channels/:id/messages', auth, async (req, res) => {
   try {
     const channel = await requireChannelAccess(req.params.id, req.user.id, res);

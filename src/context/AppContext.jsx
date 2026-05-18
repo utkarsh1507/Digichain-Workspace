@@ -884,6 +884,15 @@ export function AppProvider({ children }) {
     dispatch({ type: 'ADD_CHANNEL', channel });
     return channel;
   }
+  async function updateChannel(channelId, data) {
+    const channel = await messagesApi.updateChannel(channelId, data);
+    if ((channel.memberIds || []).includes(state.currentUser?.id)) {
+      dispatch({ type: 'UPDATE_CHANNEL', channel });
+    } else {
+      dispatch({ type: 'REMOVE_CHANNEL', id: channel.id });
+    }
+    return channel;
+  }
   async function updateChannelMembers(channelId, data) {
     const channel = await messagesApi.updateChannelMembers(channelId, data);
     if ((channel.memberIds || []).includes(state.currentUser?.id)) {
@@ -1021,7 +1030,7 @@ export function AppProvider({ children }) {
     signIn, signOut, resetTodayAttendance,
     applyLeave, updateLeaveStatus, deleteLeave,
     createTask, updateTask, deleteTask, addTaskComment,
-    loadMessages, sendMessage, sendFile, reactToMessage, deleteMessage, ensureDm, createChannel, updateChannelMembers, deleteChannel, markChannelRead,
+    loadMessages, sendMessage, sendFile, reactToMessage, deleteMessage, ensureDm, createChannel, updateChannel, updateChannelMembers, deleteChannel, markChannelRead,
     createAnnouncement, updateAnnouncement, deleteAnnouncement, reactToAnnouncement,
     uploadDocument, deleteDocument,
     createMeeting, updateMeeting, deleteMeeting,
