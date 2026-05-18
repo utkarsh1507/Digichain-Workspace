@@ -9,6 +9,7 @@ import {
   Card, StatCard, Button, Pill, Avatar, AvatarStack,
   Eyebrow, Section, Divider, Empty, priorityTone, statusTone, timeAgo, fmtDate
 } from '../components/ui';
+import { LEAVE_TYPE_CONFIG, getLeaveTotal } from '../constants/workspace.js';
 import { normalizeMeetLink } from '../utils/meet';
 import { isMeetingToday, isUpcomingMeeting, sortMeetingsByNextOccurrence } from '../utils/meetingSchedule';
 import { getPresence, getStatusText } from '../utils/presence';
@@ -47,24 +48,32 @@ export default function Dashboard() {
   const { currentUser, tasks, meetings, announcements, attendance, leaves, todayAttendance, users } = state;
   const navigate = useNavigate();
   const quote = QUOTES[new Date().getDay() % QUOTES.length];
+  const activeUser = users.find((user) => user.id === currentUser?.id) || currentUser;
 
-  if (currentUser?.role === 'founder') return <FounderDashboard />;
+  if (activeUser?.role === 'founder') return <FounderDashboard />;
 
   const today = getIstDateString();
-  const myTasks = tasks.filter(t => t.assigneeId === currentUser?.id);
+  const myTasks = tasks.filter(t => t.assigneeId === activeUser?.id);
   const dueTodayTasks = myTasks.filter(t => t.dueDate === today && t.status !== 'Completed');
   const upcomingMeetings = sortMeetingsByNextOccurrence(
-    meetings.filter((meeting) => isUpcomingMeeting(meeting, today) && (meeting.attendeeIds || []).includes(currentUser?.id)),
+    meetings.filter((meeting) => isUpcomingMeeting(meeting, today) && (meeting.attendeeIds || []).includes(activeUser?.id)),
     today
   );
   const todaySession = todayAttendance && !todayAttendance.signOut ? todayAttendance : null;
 
-  // Leave balance from approved leaves
-  const myApprovedLeaves = leaves.filter(l => l.userId === currentUser?.id && l.status === 'Approved');
-  const totalLeaveUsed = myApprovedLeaves.reduce((s, l) => s + (l.days || 0), 0);
-  const leaveBalance = 38 - totalLeaveUsed;
+  // Leave balance = sum of remaining balances across all leave types
+  const myApprovedLeaves = leaves.filter(l => l.userId === activeUser?.id && l.status === 'Approved');
+  const usedByType = {};
+  myApprovedLeaves.forEach((leave) => {
+    usedByType[leave.type] = (usedByType[leave.type] || 0) + Number(leave.days || 0);
+  });
+  const leaveBalance = LEAVE_TYPE_CONFIG.reduce((sum, type) => {
+    const total = getLeaveTotal(activeUser, type.id);
+    const used = usedByType[type.id] || 0;
+    return sum + Math.max(0, total - used);
+  }, 0);
 
-  const teamMembers = users.filter(u => u.id !== currentUser?.id);
+  const teamMembers = users.filter(u => u.id !== activeUser?.id);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 28, maxWidth: 1280, margin: '0 auto' }} className="fade-in">
@@ -73,7 +82,7 @@ export default function Dashboard() {
         <div>
           <Eyebrow>{todayStr()}</Eyebrow>
           <h1 style={{ margin: '6px 0 0', fontSize: 30, fontWeight: 700, letterSpacing: '-0.02em' }}>
-            {greet(currentUser?.name || '')}
+            {greet(activeUser?.name || '')}
           </h1>
           <p style={{ margin: '6px 0 0', color: 'var(--fg-3)', fontSize: 14 }}>
             "{quote.text}" — <span style={{ color: 'var(--fg-2)' }}>{quote.author}</span>
