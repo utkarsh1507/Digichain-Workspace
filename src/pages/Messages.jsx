@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Hash, Plus, Send, Paperclip, Search, Users, X, File, Image, CheckCheck, Smile, Trash2, Download } from 'lucide-react';
+import { Hash, Plus, Send, Paperclip, Users, X, File, Image, CheckCheck, Smile, Trash2, Download } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar, IconBtn, Button, Empty, Modal, Input, fmtTime } from '../components/ui';
 import { messagesApi } from '../api/index.js';
@@ -19,8 +19,6 @@ export default function Messages() {
   const navigate = useNavigate();
 
   const [activeId, setActiveId] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [chatSearchQuery, setChatSearchQuery] = useState('');
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [newChannelOpen, setNewChannelOpen] = useState(false);
@@ -42,12 +40,10 @@ export default function Messages() {
   // Separate channels and DMs
   const myChannels = channels.filter(c => c.type === 'channel');
   const myDMs = channels.filter(c => c.type === 'dm');
-  const normalizedSearch = searchQuery.trim().toLowerCase();
   const conversations = [...myChannels, ...myDMs];
 
   const active = channels.find(c => c.id === activeId);
   const activeMsgs = channelMessages[activeId] || [];
-  const normalizedChatSearch = chatSearchQuery.trim().toLowerCase();
   const activeSeenBy = channelSeenBy[activeId] || {};
   const now = Date.now();
   const activeOtherUser = getDMOtherUser(active);
@@ -195,40 +191,6 @@ export default function Messages() {
     const senderName = isMe ? 'You' : sender?.name?.split(' ')[0];
     return `${senderName}: ${last.text || '…'}`;
   }
-
-  const filteredChannels = normalizedSearch
-    ? myChannels.filter((channel) => {
-        const name = getConvName(channel).toLowerCase();
-        const description = (channel.description || '').toLowerCase();
-        const last = getLastMsg(channel.id).toLowerCase();
-        return name.includes(normalizedSearch) || description.includes(normalizedSearch) || last.includes(normalizedSearch);
-      })
-    : myChannels;
-
-  const filteredDMs = normalizedSearch
-    ? myDMs.filter((channel) => {
-        const name = getConvName(channel).toLowerCase();
-        const last = getLastMsg(channel.id).toLowerCase();
-        return name.includes(normalizedSearch) || last.includes(normalizedSearch);
-      })
-    : myDMs;
-
-  const visibleActiveMsgs = normalizedChatSearch
-    ? activeMsgs.filter((message) => {
-        const senderName = getSenderName(message).toLowerCase();
-        const attachmentName = (message.attachmentName || '').toLowerCase();
-        const messageText = (message.text || '').toLowerCase();
-        const dayLabel = getDayDividerLabel(message.timestamp).toLowerCase();
-        const timeLabel = fmtTime(message.timestamp).toLowerCase();
-        return (
-          senderName.includes(normalizedChatSearch) ||
-          attachmentName.includes(normalizedChatSearch) ||
-          messageText.includes(normalizedChatSearch) ||
-          dayLabel.includes(normalizedChatSearch) ||
-          timeLabel.includes(normalizedChatSearch)
-        );
-      })
-    : activeMsgs;
 
   async function handleSwitchChannel(id) {
     setActiveId(id);
@@ -451,18 +413,8 @@ export default function Messages() {
 
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-1)', background: 'var(--bg-1)', overflow: 'hidden' }}>
-        {/* Search */}
-        <div style={{ padding: '12px 12px 8px', borderBottom: '1px solid var(--border-1)', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
-            background: 'var(--bg-2)', borderRadius: 8 }}>
-            <Search size={13} color="var(--fg-3)" />
-            <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search conversations..." style={{ flex: 1, border: 'none', background: 'transparent',
-              outline: 'none', fontFamily: 'inherit', fontSize: 12, color: 'var(--fg-1)' }} />
-          </div>
-        </div>
-
         {/* Lists */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '6px 8px' }}>
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 8px 6px' }}>
           {/* Channels */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 6px 4px' }}>
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', color: 'var(--fg-4)' }}>Channels</span>
@@ -471,7 +423,7 @@ export default function Messages() {
               <Plus size={13} />
             </button>
           </div>
-          {filteredChannels.map(c => (
+          {myChannels.map(c => (
             <ConvItem key={c.id} conv={c} active={c.id === activeId}
               name={getConvName(c)} last={getLastMsg(c.id)}
               unread={state.unreadCounts?.[c.id] || 0}
@@ -482,7 +434,7 @@ export default function Messages() {
           <div style={{ padding: '12px 6px 4px' }}>
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', color: 'var(--fg-4)' }}>Direct Messages</span>
           </div>
-          {filteredDMs.map(d => (
+          {myDMs.map(d => (
             <ConvItem key={d.id} conv={d} active={d.id === activeId}
               name={getConvName(d)} last={getLastMsg(d.id)}
               avatar={getConvAvatar(d)}
@@ -495,7 +447,7 @@ export default function Messages() {
           <div style={{ padding: '12px 6px 4px' }}>
             <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', color: 'var(--fg-4)' }}>New DM</span>
           </div>
-          {users.filter(u => u.id !== currentUser?.id && (!normalizedSearch || u.name.toLowerCase().includes(normalizedSearch))).map(u => (
+          {users.filter(u => u.id !== currentUser?.id).map(u => (
             <div key={u.id} onClick={() => handleDMUser(u.id)}
               style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 8, cursor: 'pointer' }}
               onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-3)'}
@@ -546,42 +498,6 @@ export default function Messages() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '6px 10px',
-                  background: 'var(--bg-1)',
-                  border: '1px solid var(--border-1)',
-                  borderRadius: 10,
-                  minWidth: 220,
-                }}>
-                  <Search size={13} color="var(--fg-3)" />
-                  <input
-                    value={chatSearchQuery}
-                    onChange={e => setChatSearchQuery(e.target.value)}
-                    placeholder="Search in chat..."
-                    style={{
-                      flex: 1,
-                      border: 'none',
-                      background: 'transparent',
-                      outline: 'none',
-                      fontFamily: 'inherit',
-                      fontSize: 12,
-                      color: 'var(--fg-1)',
-                    }}
-                  />
-                  {chatSearchQuery && (
-                    <button
-                      type="button"
-                      onClick={() => setChatSearchQuery('')}
-                      style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: 0, color: 'var(--fg-3)' }}
-                      aria-label="Clear chat search"
-                      title="Clear chat search">
-                      <X size={13} />
-                    </button>
-                  )}
-                </div>
                 {active.type === 'channel' && <IconBtn icon={Users} title="Members" onClick={() => setMembersOpen(true)} />}
                 {canDeleteActive && (
                   <Button
@@ -600,11 +516,9 @@ export default function Messages() {
             <div style={{ flex: 1, overflowY: 'auto', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 2 }}>
               {activeMsgs.length === 0
                 ? <Empty icon={Hash} title="No messages yet" hint="Be the first to say something!" />
-                : visibleActiveMsgs.length === 0
-                ? <Empty icon={Search} title="No matching messages" hint={`No messages found for "${chatSearchQuery}".`} />
-                : visibleActiveMsgs.map((m, i) => {
-                  const prev = i > 0 ? visibleActiveMsgs[i - 1] : null;
-                  const next = i < visibleActiveMsgs.length - 1 ? visibleActiveMsgs[i + 1] : null;
+                : activeMsgs.map((m, i) => {
+                  const prev = i > 0 ? activeMsgs[i - 1] : null;
+                  const next = i < activeMsgs.length - 1 ? activeMsgs[i + 1] : null;
                   const senderId = getSenderId(m);
                   const isMe = senderId === currentUser?.id;
                   const senderName = getSenderName(m);
