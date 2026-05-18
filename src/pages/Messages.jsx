@@ -418,6 +418,15 @@ export default function Messages() {
     );
   }
 
+  function FounderNameMark({ name }) {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+        <span style={{ minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
+        <img src="/favicon-dg.png" alt="" aria-hidden="true" style={{ width: 12, height: 12, flexShrink: 0, borderRadius: 3 }} />
+      </span>
+    );
+  }
+
   function toggleSection(sectionKey) {
     setCollapsedSections((prev) => ({ ...prev, [sectionKey]: !prev[sectionKey] }));
   }
@@ -716,7 +725,7 @@ export default function Messages() {
                           {!grouped && !isMe && (
                             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                               <span style={{ fontSize: 12, fontWeight: 600 }}>
-                                {isFounderSender ? <FounderNameTag name={senderName} /> : senderName}
+                                {isFounderSender ? <FounderNameMark name={senderName} /> : senderName}
                               </span>
                             </div>
                           )}
@@ -816,7 +825,7 @@ export default function Messages() {
                           <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                             <span>Seen by</span>
                             {activeOtherIsFounder
-                              ? <FounderNameTag name={getConvName(active).split(' ')[0]} />
+                              ? <FounderNameMark name={getConvName(active).split(' ')[0]} />
                               : getConvName(active).split(' ')[0]}
                           </span>
                         </div>
