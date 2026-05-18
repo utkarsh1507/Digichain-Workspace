@@ -35,6 +35,18 @@ function parseChannel(c) {
   return { ...c, memberIds: parseMemberIds(c.memberIds), emoji: c.emoji || '#' };
 }
 
+async function getFounderIds() {
+  const founders = await prisma.user.findMany({
+    where: { role: 'founder' },
+    select: { id: true },
+  });
+  return founders.map((user) => user.id);
+}
+
+function uniqueIds(ids = []) {
+  return Array.from(new Set((ids || []).filter(Boolean)));
+}
+
 function normalizeMessageAttachment(message) {
   if (!message?.attachmentUrl) return message;
   return {
@@ -213,6 +225,61 @@ router.post('/channels/:id/upload', auth, uploadFile.single('file'), async (req,
     broadcast('message:new', payload, parseMemberIds(channel.memberIds));
     res.json(payload);
   } catch (err) {
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// PATCH /api/channels/:id/members
+router.patch('/channels/:id/members', auth, async (req, res) => {
+  try {
+    const channel = await requireChannelAccess(req.params.id, req.user.id, res);
+    if (!channel) return;
+    if (channel.type !== 'channel') return res.status(400).json({ error: 'Members can only be managed for channels' });
+
+    const { addMemberIds = [], removeMemberIds = [] } = req.body || {};
+    const currentMemberIds = parseMemberIds(channel.memberIds);
+    const founderIds = await getFounderIds();
+    const founderMemberIds = currentMemberIds.filter((id) => founderIds.includes(id));
+
+    let nextMemberIds = [...currentMemberIds];
+
+    const normalizedAdds = uniqueIds(addMemberIds).filter((id) => !nextMemberIds.includes(id));
+    if (normalizedAdds.length) {
+      nextMemberIds = uniqueIds([...nextMemberIds, ...normalizedAdds]);
+    }
+
+    const normalizedRemovals = uniqueIds(removeMemberIds).filter((id) => nextMemberIds.includes(id));
+    if (normalizedRemovals.length) {
+      const canRemoveMembers = founderMemberIds.length > 0
+        ? req.user.role === 'founder'
+        : channel.createdById === req.user.id;
+
+      if (!canRemoveMembers) {
+        return res.status(403).json({
+          error: founderMemberIds.length > 0
+            ? 'Only admin can remove members from this channel'
+            : 'Only the channel creator can remove members when no admin is in the channel',
+        });
+      }
+
+      nextMemberIds = nextMemberIds.filter((id) => !normalizedRemovals.includes(id));
+      if (!nextMemberIds.length) {
+        return res.status(400).json({ error: 'A channel must have at least one member' });
+      }
+    }
+
+    const updated = await prisma.channel.update({
+      where: { id: channel.id },
+      data: { memberIds: JSON.stringify(nextMemberIds) },
+    });
+
+    channelCache[channel.id] = { channel: updated, expiry: Date.now() + CHANNEL_CACHE_TTL };
+    const parsed = parseChannel(updated);
+    const targets = uniqueIds([...currentMemberIds, ...nextMemberIds]);
+    broadcast('channel:update', parsed, targets);
+    res.json(parsed);
+  } catch (err) {
+    console.error(err);
     res.status(500).json({ error: 'Server error' });
   }
 });

@@ -147,6 +147,7 @@ export const tasksApi = {
 export const messagesApi = {
   listChannels: () => req('GET', '/channels'),
   createChannel: (data) => req('POST', '/channels', data),
+  updateChannelMembers: (channelId, data) => req('PATCH', `/channels/${channelId}/members`, data),
   deleteChannel: (channelId) => req('DELETE', `/channels/${channelId}`),
   // Returns { messages, seenBy }
   getMessages: (channelId) => req('GET', `/channels/${channelId}/messages`),

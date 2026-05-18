@@ -13,7 +13,7 @@ const EMOJIS = ['👍', '❤️', '🔥', '🚀', '✅', '😂', '😮', '👏']
 export default function Messages() {
   const {
     state, loadMessages, sendMessage, sendFile, reactToMessage, deleteMessage,
-    ensureDm, createChannel, deleteChannel, markChannelRead, setActiveChannel,
+    ensureDm, createChannel, updateChannelMembers, deleteChannel, markChannelRead, setActiveChannel,
   } = useApp();
   const { currentUser, channels, channelMessages, channelSeenBy, users, typingByChannel } = state;
   const navigate = useNavigate();
@@ -22,7 +22,9 @@ export default function Messages() {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [newChannelOpen, setNewChannelOpen] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
   const [channelForm, setChannelForm] = useState({ name: '', description: '', emoji: CHANNEL_ICON_OPTIONS[0].value, memberIds: [] });
+  const [updatingMembers, setUpdatingMembers] = useState(false);
   const [attachedFile, setAttachedFile] = useState(null);
   const [pickerForMsgId, setPickerForMsgId] = useState(null);
   const [deletingChannel, setDeletingChannel] = useState(false);
@@ -44,6 +46,14 @@ export default function Messages() {
   const now = Date.now();
   const activeOtherUser = getDMOtherUser(active);
   const activePresence = getPresence(activeOtherUser, now);
+  const founderIds = users.filter((u) => u.role === 'founder').map((u) => u.id);
+  const activeMemberIds = active?.memberIds || [];
+  const founderMemberIds = activeMemberIds.filter((id) => founderIds.includes(id));
+  const canRemoveFromActive = !!active && active.type === 'channel' && (
+    founderMemberIds.length > 0
+      ? currentUser?.role === 'founder'
+      : active.createdById === currentUser?.id
+  );
   const canDeleteActive = !!active && (
     active.type === 'dm'
       ? (active.memberIds || []).includes(currentUser?.id)
@@ -152,6 +162,13 @@ export default function Messages() {
     return getDMOtherUser(conv)?.avatar || null;
   }
 
+  function getChannelMembers(channel) {
+    if (!channel?.memberIds) return [];
+    return channel.memberIds
+      .map((id) => users.find((user) => user.id === id))
+      .filter(Boolean);
+  }
+
   function getLastMsg(convId) {
     const msgs = channelMessages[convId] || [];
     if (!msgs.length) return 'No messages yet';
@@ -257,6 +274,32 @@ export default function Messages() {
       setChannelForm({ name: '', description: '', emoji: CHANNEL_ICON_OPTIONS[0].value, memberIds: [] });
       setActiveId(ch.id);
     } catch (err) { alert(err.message); }
+  }
+
+  async function handleAddMember(userId) {
+    if (!active || active.type !== 'channel' || updatingMembers) return;
+    setUpdatingMembers(true);
+    try {
+      await updateChannelMembers(active.id, { addMemberIds: [userId] });
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setUpdatingMembers(false);
+    }
+  }
+
+  async function handleRemoveMember(userId) {
+    if (!active || active.type !== 'channel' || updatingMembers) return;
+    const user = users.find((entry) => entry.id === userId);
+    if (!window.confirm(`Remove ${user?.name || 'this member'} from ${getConvName(active)}?`)) return;
+    setUpdatingMembers(true);
+    try {
+      await updateChannelMembers(active.id, { removeMemberIds: [userId] });
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setUpdatingMembers(false);
+    }
   }
 
   function handleFileSelect(e) {
@@ -418,7 +461,7 @@ export default function Messages() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                {active.type === 'channel' && <IconBtn icon={Users} title="Members" />}
+                {active.type === 'channel' && <IconBtn icon={Users} title="Members" onClick={() => setMembersOpen(true)} />}
                 {canDeleteActive && (
                   <Button
                     variant="danger"
@@ -788,6 +831,76 @@ export default function Messages() {
             <Button type="submit" variant="primary">Create Channel</Button>
           </div>
         </form>
+      </Modal>
+
+      <Modal open={membersOpen && active?.type === 'channel'} onClose={() => setMembersOpen(false)} title="Manage Members">
+        {active?.type === 'channel' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-3)', marginBottom: 10 }}>
+                Current Members
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
+                {getChannelMembers(active).map((user) => {
+                  const isCreator = active.createdById === user.id;
+                  const isFounder = user.role === 'founder';
+                  const canRemoveThisUser = canRemoveFromActive && user.id !== currentUser?.id;
+                  return (
+                    <div key={user.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 10, background: 'var(--bg-1)' }}>
+                      <Avatar name={user.name} size={30} src={user.avatar} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>
+                          {user.title || user.role}
+                          {isFounder ? ' · Admin' : ''}
+                          {isCreator ? ' · Creator' : ''}
+                        </div>
+                      </div>
+                      {canRemoveThisUser ? (
+                        <Button variant="danger" size="sm" onClick={() => handleRemoveMember(user.id)} disabled={updatingMembers}>
+                          Remove
+                        </Button>
+                      ) : (
+                        <span style={{ fontSize: 11, color: 'var(--fg-4)' }}>
+                          {user.id === currentUser?.id ? 'You' : 'Member'}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--fg-3)', marginBottom: 10 }}>
+                Add People
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 220, overflowY: 'auto' }}>
+                {users.filter((user) => !activeMemberIds.includes(user.id)).map((user) => (
+                  <div key={user.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', borderRadius: 10, background: '#fff', border: '1px solid var(--border-1)' }}>
+                    <Avatar name={user.name} size={30} src={user.avatar} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{user.name}</div>
+                      <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>{user.title || user.role}</div>
+                    </div>
+                    <Button variant="secondary" size="sm" onClick={() => handleAddMember(user.id)} disabled={updatingMembers}>
+                      Add
+                    </Button>
+                  </div>
+                ))}
+                {users.filter((user) => !activeMemberIds.includes(user.id)).length === 0 && (
+                  <div style={{ padding: '14px 10px', fontSize: 12, color: 'var(--fg-3)', textAlign: 'center' }}>
+                    Everyone is already in this channel.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div style={{ padding: '10px 12px', borderRadius: 10, background: 'var(--bg-1)', fontSize: 12, color: 'var(--fg-3)' }}>
+              Any channel member can add people. Removing members is allowed only for admin, or for the channel creator when no admin is part of the channel.
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   );

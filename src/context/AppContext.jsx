@@ -302,6 +302,9 @@ function reducer(state, action) {
     case 'ADD_CHANNEL': {
       return { ...state, channels: upsertById(state.channels, action.channel, { prepend: false }) };
     }
+    case 'UPDATE_CHANNEL': {
+      return { ...state, channels: upsertById(state.channels, action.channel, { prepend: false }) };
+    }
     case 'ADD_MESSAGE': {
       const prev = state.channelMessages[action.channelId] || [];
       if (prev.some((message) => message.id === action.message.id)) return state;
@@ -547,6 +550,17 @@ export function AppProvider({ children }) {
         try {
           const { id } = JSON.parse(e.data);
           dispatch({ type: 'REMOVE_CHANNEL', id });
+        } catch {}
+      });
+
+      es.addEventListener('channel:update', (e) => {
+        try {
+          const channel = JSON.parse(e.data);
+          if ((channel.memberIds || []).includes(state.currentUser.id)) {
+            dispatch({ type: 'UPDATE_CHANNEL', channel });
+          } else {
+            dispatch({ type: 'REMOVE_CHANNEL', id: channel.id });
+          }
         } catch {}
       });
 
@@ -870,6 +884,15 @@ export function AppProvider({ children }) {
     dispatch({ type: 'ADD_CHANNEL', channel });
     return channel;
   }
+  async function updateChannelMembers(channelId, data) {
+    const channel = await messagesApi.updateChannelMembers(channelId, data);
+    if ((channel.memberIds || []).includes(state.currentUser?.id)) {
+      dispatch({ type: 'UPDATE_CHANNEL', channel });
+    } else {
+      dispatch({ type: 'REMOVE_CHANNEL', id: channel.id });
+    }
+    return channel;
+  }
   async function deleteChannel(channelId) {
     await messagesApi.deleteChannel(channelId);
     dispatch({ type: 'REMOVE_CHANNEL', id: channelId });
@@ -998,7 +1021,7 @@ export function AppProvider({ children }) {
     signIn, signOut, resetTodayAttendance,
     applyLeave, updateLeaveStatus, deleteLeave,
     createTask, updateTask, deleteTask, addTaskComment,
-    loadMessages, sendMessage, sendFile, reactToMessage, deleteMessage, ensureDm, createChannel, deleteChannel, markChannelRead,
+    loadMessages, sendMessage, sendFile, reactToMessage, deleteMessage, ensureDm, createChannel, updateChannelMembers, deleteChannel, markChannelRead,
     createAnnouncement, updateAnnouncement, deleteAnnouncement, reactToAnnouncement,
     uploadDocument, deleteDocument,
     createMeeting, updateMeeting, deleteMeeting,
