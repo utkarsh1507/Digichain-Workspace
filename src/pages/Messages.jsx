@@ -409,8 +409,8 @@ export default function Messages() {
   function FounderNameTag({ name }) {
     return (
       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-        <img src="/favicon-dg.png" alt="" aria-hidden="true" style={{ width: 12, height: 12, flexShrink: 0, borderRadius: 3 }} />
         <span style={{ minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
+        <img src="/favicon-dg.png" alt="" aria-hidden="true" style={{ width: 12, height: 12, flexShrink: 0, borderRadius: 3 }} />
         <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 6px', borderRadius: 999, background: 'rgba(201, 160, 51, 0.12)', border: '1px solid rgba(201, 160, 51, 0.24)', color: '#8b6b12', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', flexShrink: 0 }}>
           Founder
         </span>
@@ -598,7 +598,7 @@ export default function Messages() {
                     </div>
                   )}
                   {active.type === 'dm' && (
-                    <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 8, padding: activeOtherIsFounder ? '6px 10px' : 0, borderRadius: activeOtherIsFounder ? 999 : 0, background: activeOtherIsFounder ? 'rgba(201, 160, 51, 0.09)' : 'transparent', border: activeOtherIsFounder ? '1px solid rgba(201, 160, 51, 0.22)' : 'none', fontSize: 11, color: activePresence.state === 'online' ? '#16a371' : activePresence.state === 'away' ? '#d97706' : 'var(--fg-3)' }}>
+                    <div style={{ marginTop: 4, fontSize: 11, color: activePresence.state === 'online' ? '#16a371' : activePresence.state === 'away' ? '#d97706' : 'var(--fg-3)' }}>
                       {getStatusText(activeOtherUser)} · {activePresence.detail}
                     </div>
                   )}
@@ -628,7 +628,7 @@ export default function Messages() {
                   const next = i < activeMsgs.length - 1 ? activeMsgs[i + 1] : null;
                   const senderId = getSenderId(m);
                   const senderUser = getSenderUser(m);
-                  const isFounderSender = senderUser?.role === 'founder';
+                  const isFounderSender = founderIds.includes(senderId) || senderUser?.role === 'founder' || (active?.type === 'dm' && activeOtherIsFounder && senderId !== currentUser?.id);
                   const isMe = senderId === currentUser?.id;
                   const senderName = getSenderName(m);
                   const grouped = prev && getSenderId(prev) === senderId;
@@ -813,8 +813,11 @@ export default function Messages() {
                       {isLastSeenMsg && active.type === 'dm' && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 2, marginRight: 4 }}>
                           <CheckCheck size={13} color="var(--accent)" />
-                          <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 600 }}>
-                            Seen by {getConvName(active).split(' ')[0]}
+                          <span style={{ fontSize: 10, color: 'var(--accent)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <span>Seen by</span>
+                            {activeOtherIsFounder
+                              ? <FounderNameTag name={getConvName(active).split(' ')[0]} />
+                              : getConvName(active).split(' ')[0]}
                           </span>
                         </div>
                       )}
