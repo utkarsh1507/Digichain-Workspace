@@ -20,7 +20,7 @@ const channelCache = {};
 const CHANNEL_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
 const msgInclude = {
-  sender: { select: { id: true, name: true, avatar: true } },
+  sender: { select: { id: true, name: true, avatar: true, role: true } },
 };
 
 function parseMemberIds(memberIds) {

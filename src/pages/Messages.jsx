@@ -406,6 +406,18 @@ export default function Messages() {
     return `${getDayDividerLabel(timestamp)} at ${fmtTime(timestamp)}`;
   }
 
+  function FounderNameTag({ name }) {
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+        <img src="/favicon-dg.png" alt="" aria-hidden="true" style={{ width: 12, height: 12, flexShrink: 0, borderRadius: 3 }} />
+        <span style={{ minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', padding: '2px 6px', borderRadius: 999, background: 'rgba(201, 160, 51, 0.12)', border: '1px solid rgba(201, 160, 51, 0.24)', color: '#8b6b12', fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', flexShrink: 0 }}>
+          Founder
+        </span>
+      </span>
+    );
+  }
+
   function toggleSection(sectionKey) {
     setCollapsedSections((prev) => ({ ...prev, [sectionKey]: !prev[sectionKey] }));
   }
@@ -576,7 +588,9 @@ export default function Messages() {
                   <div
                     onClick={() => active.type === 'dm' && activeOtherUser && navigate(`/profile/${activeOtherUser.id}`)}
                     style={{ fontSize: 15, fontWeight: 600, cursor: active.type === 'dm' && activeOtherUser ? 'pointer' : 'default' }}>
-                      {getConvName(active)}
+                      {active.type === 'dm' && activeOtherIsFounder
+                        ? <FounderNameTag name={getConvName(active)} />
+                        : getConvName(active)}
                     </div>
                   {active.type === 'channel' && (
                     <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>
@@ -701,7 +715,9 @@ export default function Messages() {
                           </div>
                           {!grouped && !isMe && (
                             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                              <span style={{ fontSize: 12, fontWeight: 600 }}>{senderName}</span>
+                              <span style={{ fontSize: 12, fontWeight: 600 }}>
+                                {isFounderSender ? <FounderNameTag name={senderName} /> : senderName}
+                              </span>
                             </div>
                           )}
 
