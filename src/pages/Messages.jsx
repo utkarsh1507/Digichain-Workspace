@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Hash, Plus, Send, Paperclip, Users, X, File, Image, CheckCheck, Smile, Trash2, Download, ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Hash, Plus, Send, Paperclip, Users, X, File, Image, CheckCheck, Smile, Trash2, Download, ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen, ShieldCheck, Crown } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar, IconBtn, Button, Empty, Modal, Input, fmtTime } from '../components/ui';
 import { messagesApi } from '../api/index.js';
@@ -54,6 +54,7 @@ export default function Messages() {
   const now = Date.now();
   const activeOtherUser = getDMOtherUser(active);
   const activePresence = getPresence(activeOtherUser, now);
+  const activeOtherIsFounder = activeOtherUser?.role === 'founder';
   const founderIds = users.filter((u) => u.role === 'founder').map((u) => u.id);
   const activeMemberIds = active?.memberIds || [];
   const founderMemberIds = activeMemberIds.filter((id) => founderIds.includes(id));
@@ -339,6 +340,7 @@ export default function Messages() {
     const sender = m.sender || users.find(u => u.id === m.senderId);
     return sender?.name || 'Unknown';
   };
+  const getSenderUser = (m) => m.sender || users.find(u => u.id === m.senderId) || null;
 
   // Determine "seen" status for current user's messages
   // A message is "seen" if any other member's lastReadAt > message.timestamp
@@ -564,7 +566,7 @@ export default function Messages() {
                       onClick={() => activeOtherUser && navigate(`/profile/${activeOtherUser.id}`)}
                       title="View profile"
                       style={{ border: 'none', background: 'transparent', padding: 0, cursor: activeOtherUser ? 'pointer' : 'default', display: 'inline-flex' }}>
-                      <Avatar name={getConvName(active)} size={32} src={activeOtherUser?.avatar} status={activePresence.state} />
+                      <Avatar name={getConvName(active)} size={32} src={activeOtherUser?.avatar} status={activePresence.state} founder={activeOtherIsFounder} ring={activeOtherIsFounder} />
                     </button>
                   : <span style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--accent-tint)', display: 'inline-flex',
                       alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700 }}>
@@ -573,16 +575,23 @@ export default function Messages() {
                 <div>
                   <div
                     onClick={() => active.type === 'dm' && activeOtherUser && navigate(`/profile/${activeOtherUser.id}`)}
-                    style={{ fontSize: 15, fontWeight: 600, cursor: active.type === 'dm' && activeOtherUser ? 'pointer' : 'default' }}>
-                    {getConvName(active)}
-                  </div>
+                    style={{ fontSize: 15, fontWeight: 600, cursor: active.type === 'dm' && activeOtherUser ? 'pointer' : 'default', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {getConvName(active)}
+                      {active.type === 'dm' && activeOtherIsFounder && (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 999, background: 'rgba(15,23,42,0.06)', color: '#334155', fontSize: 10, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                          <ShieldCheck size={11} />
+                          Admin
+                        </span>
+                      )}
+                    </div>
                   {active.type === 'channel' && (
                     <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>
                       {(active.memberIds || []).length} members{active.description ? ` · ${active.description}` : ''}
                     </div>
                   )}
                   {active.type === 'dm' && (
-                    <div style={{ fontSize: 11, color: activePresence.state === 'online' ? '#16a371' : activePresence.state === 'away' ? '#d97706' : 'var(--fg-3)' }}>
+                    <div style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 8, padding: activeOtherIsFounder ? '6px 10px' : 0, borderRadius: activeOtherIsFounder ? 999 : 0, background: activeOtherIsFounder ? 'rgba(15,23,42,0.05)' : 'transparent', border: activeOtherIsFounder ? '1px solid rgba(51,65,85,0.08)' : 'none', fontSize: 11, color: activePresence.state === 'online' ? '#16a371' : activePresence.state === 'away' ? '#d97706' : 'var(--fg-3)' }}>
+                      {activeOtherIsFounder && <Crown size={12} color="#475569" />}
                       {getStatusText(activeOtherUser)} · {activePresence.detail}
                     </div>
                   )}
@@ -611,6 +620,8 @@ export default function Messages() {
                   const prev = i > 0 ? activeMsgs[i - 1] : null;
                   const next = i < activeMsgs.length - 1 ? activeMsgs[i + 1] : null;
                   const senderId = getSenderId(m);
+                  const senderUser = getSenderUser(m);
+                  const isFounderSender = senderUser?.role === 'founder';
                   const isMe = senderId === currentUser?.id;
                   const senderName = getSenderName(m);
                   const grouped = prev && getSenderId(prev) === senderId;
@@ -637,7 +648,7 @@ export default function Messages() {
                         position: 'relative', width: '100%' }}>
                         {!isMe && (
                           <div style={{ width: 32, flexShrink: 0, display: 'flex', alignItems: 'flex-end' }}>
-                            {!grouped && <Avatar name={senderName} size={32} src={m.sender?.avatar} status={getPresence(m.sender || users.find(u => u.id === senderId), now).state} />}
+                            {!grouped && <Avatar name={senderName} size={32} src={m.sender?.avatar} status={getPresence(m.sender || users.find(u => u.id === senderId), now).state} founder={isFounderSender} ring={isFounderSender} />}
                           </div>
                         )}
                         <div style={{ maxWidth: '68%', display: 'flex', flexDirection: 'column', alignItems: isMe ? 'flex-end' : 'flex-start', gap: 2, position: 'relative' }}>
@@ -698,6 +709,12 @@ export default function Messages() {
                           {!grouped && !isMe && (
                             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                               <span style={{ fontSize: 12, fontWeight: 600 }}>{senderName}</span>
+                              {isFounderSender && (
+                                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 7px', borderRadius: 999, background: 'rgba(15,23,42,0.06)', color: '#334155', fontSize: 9, fontWeight: 800, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                                  <ShieldCheck size={10} />
+                                  Admin
+                                </span>
+                              )}
                             </div>
                           )}
 
@@ -709,7 +726,7 @@ export default function Messages() {
                                 onClick={() => window.open(m.attachmentUrl, '_blank')} />
                             ) : (
                               <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
-                                borderRadius: 10, border: '1px solid var(--border-1)', background: '#fff',
+                                borderRadius: 10, border: isFounderSender ? '1px solid rgba(51,65,85,0.16)' : '1px solid var(--border-1)', background: isFounderSender ? 'linear-gradient(180deg, rgba(248,250,252,0.98) 0%, rgba(241,245,249,0.98) 100%)' : '#fff',
                                 maxWidth: 280 }}>
                                 <File size={18} color="var(--accent)" style={{ flexShrink: 0 }} />
                                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -731,7 +748,9 @@ export default function Messages() {
                           {/* Text */}
                           {messageText && (
                             <div style={{ padding: '8px 12px', borderRadius: isMe ? '14px 14px 4px 14px' : '14px 14px 14px 4px',
-                              background: isMe ? 'var(--accent)' : 'var(--bg-2)', color: isMe ? '#fff' : 'var(--fg-1)',
+                              background: isMe ? 'var(--accent)' : isFounderSender ? 'linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%)' : 'var(--bg-2)', color: isMe ? '#fff' : 'var(--fg-1)',
+                              border: !isMe && isFounderSender ? '1px solid rgba(51,65,85,0.12)' : 'none',
+                              boxShadow: !isMe && isFounderSender ? '0 8px 20px rgba(15,23,42,0.05)' : 'none',
                               fontSize: 13, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
                               {renderTextWithLinks(messageText, isMe ? '#fff' : 'var(--accent)')}
                             </div>

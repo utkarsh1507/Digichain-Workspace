@@ -8,9 +8,12 @@ export function avatarColor(seed = '') {
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
-export function Avatar({ name = '?', size = 32, src, status, ring, gradient }) {
+export function Avatar({ name = '?', size = 32, src, status, ring, gradient, founder = false }) {
   const initials = name.split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase();
   const bg = gradient ? 'var(--brand-gradient)' : src ? 'transparent' : avatarColor(name);
+  const founderRing = founder
+    ? 'linear-gradient(135deg, rgba(15,23,42,0.96) 0%, rgba(71,85,105,0.92) 55%, rgba(148,163,184,0.92) 100%)'
+    : 'var(--brand-gradient)';
   const inner = (
     <span style={{
       position: 'relative', width: size, height: size, borderRadius: '50%',
@@ -29,10 +32,33 @@ export function Avatar({ name = '?', size = 32, src, status, ring, gradient }) {
           boxShadow: '0 0 0 1px rgba(14,14,20,0.06)',
         }} />
       )}
+      {founder && (
+        <span style={{
+          position: 'absolute',
+          top: Math.max(-2, Math.round(size * -0.04)),
+          right: Math.max(-2, Math.round(size * -0.04)),
+          minWidth: Math.max(16, Math.round(size * 0.34)),
+          height: Math.max(16, Math.round(size * 0.34)),
+          borderRadius: 999,
+          padding: '0 4px',
+          border: '2px solid #fff',
+          background: 'linear-gradient(135deg, #0f172a 0%, #334155 100%)',
+          color: '#f8fafc',
+          fontSize: Math.max(8, Math.round(size * 0.12)),
+          fontWeight: 800,
+          letterSpacing: '0.08em',
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 8px 18px rgba(15,23,42,0.22)',
+        }}>
+          ADM
+        </span>
+      )}
     </span>
   );
   if (ring) return (
-    <span style={{ padding: 2, borderRadius: '50%', background: 'var(--brand-gradient)', display: 'inline-flex' }}>
+    <span style={{ padding: founder ? 3 : 2, borderRadius: '50%', background: founderRing, display: 'inline-flex', boxShadow: founder ? '0 12px 30px rgba(15,23,42,0.16)' : 'none' }}>
       {inner}
     </span>
   );

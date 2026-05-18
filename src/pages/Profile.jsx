@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
-import { Camera, Edit3, Save, X, Mail, Phone, Briefcase, Building2, Calendar, User, Key, Lock, Eye, EyeOff } from 'lucide-react';
+import { Camera, Edit3, Save, X, Mail, Phone, Briefcase, Building2, Calendar, User, Key, Lock, Eye, EyeOff, ShieldCheck, Crown } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Card, Button, Input, Textarea, Select, Pill, Eyebrow, Divider, Avatar, fmtDate } from '../components/ui';
 import { authApi, attendanceApi } from '../api';
@@ -136,13 +136,14 @@ export default function Profile() {
   const roleColors = { founder: 'accent', employee: 'info', intern: 'success' };
   const myPresence = getPresence(profileUser);
   const profileFirstName = profileUser.name?.split(' ')[0] || 'This teammate';
+  const isFounderProfile = profileUser.role === 'founder';
 
   return (
     <div style={{ display: 'flex', gap: 28, maxWidth: 1100, margin: '0 auto' }} className="fade-in">
       <div style={{ width: 300, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <Card style={{ padding: 24, textAlign: 'center' }}>
+        <Card style={{ padding: 24, textAlign: 'center', background: isFounderProfile ? 'linear-gradient(180deg, #ffffff 0%, #f7f9fc 100%)' : undefined, border: isFounderProfile ? '1px solid rgba(51,65,85,0.14)' : undefined, boxShadow: isFounderProfile ? '0 18px 40px rgba(15,23,42,0.08)' : undefined }}>
           <div style={{ position: 'relative', width: 100, height: 100, margin: '0 auto 16px' }}>
-            <Avatar name={profileUser.name} size={100} src={profileUser.avatar} status={myPresence.state} ring />
+            <Avatar name={profileUser.name} size={100} src={profileUser.avatar} status={myPresence.state} ring founder={isFounderProfile} />
             {canEditProfile && (
               <button
                 onClick={() => photoRef.current?.click()}
@@ -171,7 +172,27 @@ export default function Profile() {
           <div style={{ display: 'flex', justifyContent: 'center', gap: 6, marginBottom: 16 }}>
             <Pill tone={roleColors[profileUser.role] || 'neutral'}>{profileUser.role}</Pill>
             <Pill tone="neutral">{profileUser.department}</Pill>
+            {isFounderProfile && <Pill tone="info" icon={ShieldCheck}>Workspace Admin</Pill>}
           </div>
+          {isFounderProfile && (
+            <div style={{
+              marginBottom: 16,
+              padding: '10px 12px',
+              borderRadius: 12,
+              background: 'linear-gradient(135deg, rgba(15,23,42,0.05) 0%, rgba(51,65,85,0.08) 100%)',
+              border: '1px solid rgba(51,65,85,0.10)',
+              color: '#334155',
+              fontSize: 12,
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+            }}>
+              <Crown size={14} />
+              Founder access includes workspace oversight and elevated permissions
+            </div>
+          )}
           <Pill tone={myPresence.state === 'online' ? 'success' : myPresence.state === 'away' ? 'warning' : 'neutral'} dot>
             {getStatusText(profileUser)} - {myPresence.detail}
           </Pill>
