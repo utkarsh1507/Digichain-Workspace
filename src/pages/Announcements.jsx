@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Plus, Pin, Trash2, Megaphone } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Card, Button, IconBtn, Pill, Eyebrow, Modal, Input, Select, Textarea, Avatar, Empty, timeAgo } from '../components/ui';
+import { DASHBOARD_QUOTE_CATEGORY } from '../constants/workspace.js';
 
 const CATEGORIES = ['General', 'Important', 'HR', 'Team', 'Policy', 'Technical'];
 const EMOJIS = ['👍','❤️','🔥','🚀','🎉','👏','✅','😮'];
@@ -15,10 +16,11 @@ export default function Announcements() {
   const [createOpen, setCreateOpen] = useState(false);
   const [form, setForm] = useState({ title: '', content: '', category: 'General', pinned: false });
   const [filter, setFilter] = useState('All');
+  const visibleAnnouncements = announcements.filter((announcement) => announcement.category !== DASHBOARD_QUOTE_CATEGORY);
 
-  const pinned = announcements.filter(a => a.pinned);
-  const regular = announcements.filter(a => !a.pinned);
-  const categories = ['All', ...new Set(announcements.map(a => a.category))];
+  const pinned = visibleAnnouncements.filter(a => a.pinned);
+  const regular = visibleAnnouncements.filter(a => !a.pinned);
+  const categories = ['All', ...new Set(visibleAnnouncements.map(a => a.category))];
   const filtered = filter === 'All' ? regular : regular.filter(a => a.category === filter);
 
   async function handleCreate(e) {

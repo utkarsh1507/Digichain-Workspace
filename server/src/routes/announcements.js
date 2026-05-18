@@ -3,6 +3,7 @@ const { PrismaClient } = require('@prisma/client');
 const auth = require('../middleware/auth');
 const { broadcast } = require('../lib/events');
 const prisma = new PrismaClient();
+const DASHBOARD_QUOTE_CATEGORY = 'Dashboard Quote';
 
 // GET /api/announcements
 router.get('/', auth, async (req, res) => {
@@ -21,6 +22,9 @@ router.get('/', auth, async (req, res) => {
 router.post('/', auth, async (req, res) => {
   try {
     const { title, content, category, pinned } = req.body;
+    if (category === DASHBOARD_QUOTE_CATEGORY && req.user.role !== 'founder') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     const announcement = await prisma.announcement.create({
       data: { title, content, category: category || 'General', pinned: pinned || false, authorId: req.user.id },
       include: { author: { select: { id: true, name: true, avatar: true, title: true } } }
@@ -43,6 +47,9 @@ router.patch('/:id', auth, async (req, res) => {
       return res.status(403).json({ error: 'Forbidden' });
     }
     const { title, content, category, pinned } = req.body;
+    if (category === DASHBOARD_QUOTE_CATEGORY && req.user.role !== 'founder') {
+      return res.status(403).json({ error: 'Forbidden' });
+    }
     const updated = await prisma.announcement.update({
       where: { id: req.params.id },
       data: { title, content, category, pinned },

@@ -5,6 +5,7 @@ import {
   API_BASE,
 } from '../api/index.js';
 import { notify } from '../utils/notifications.js';
+import { DASHBOARD_QUOTE_CATEGORY } from '../constants/workspace.js';
 
 const AppContext = createContext(null);
 const IST_TIME_ZONE = 'Asia/Kolkata';
@@ -593,7 +594,7 @@ export function AppProvider({ children }) {
         try {
           const ann = JSON.parse(e.data);
           dispatch({ type: 'ADD_ANNOUNCEMENT', ann });
-          if (ann.authorId !== state.currentUser.id) {
+          if (ann.category !== DASHBOARD_QUOTE_CATEGORY && ann.authorId !== state.currentUser.id) {
             const body = ann.content?.slice(0, 90) + (ann.content?.length > 90 ? '…' : '');
             addToast({
               type: 'announcement',

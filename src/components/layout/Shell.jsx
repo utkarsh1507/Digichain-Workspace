@@ -9,6 +9,7 @@ import { useApp } from '../../context/AppContext';
 import { Avatar, IconBtn, NotificationToast, Modal, Button, Pill } from '../ui';
 import { requestNotificationPermission, getNotificationPermission } from '../../utils/notifications';
 import { STATUS_PRESETS, getPresence, getStatusMeta, getStatusText, getUserSubtitle } from '../../utils/presence';
+import { DASHBOARD_QUOTE_CATEGORY } from '../../constants/workspace.js';
 
 const NAV = [
   {
@@ -274,6 +275,7 @@ export function Shell({ children }) {
 
   // New announcements in last 24h (for badge on Announcements nav item)
   const recentAnn = (announcements || []).filter(a => {
+    if (a.category === DASHBOARD_QUOTE_CATEGORY) return false;
     if (!a.createdAt) return false;
     return Date.now() - new Date(a.createdAt).getTime() < 24 * 3600 * 1000;
   }).length;
@@ -336,7 +338,7 @@ export function Shell({ children }) {
         run: () => navigate('/messages', { state: { activeChannelId: channel.id } }),
       };
     }),
-    ...announcements.slice(0, 8).map((announcement) => ({
+    ...announcements.filter((announcement) => announcement.category !== DASHBOARD_QUOTE_CATEGORY).slice(0, 8).map((announcement) => ({
       id: `announcement:${announcement.id}`,
       group: 'Announcements',
       label: announcement.title,

@@ -2,14 +2,19 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Zap, Plus, Check, Clock, Video, ChevronRight, TrendingUp,
-  Users, ClipboardList, CalendarCheck, AlertCircle, CheckCircle2, Target
+  Users, ClipboardList, CalendarCheck, AlertCircle, CheckCircle2, Target, Pencil
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
   Card, StatCard, Button, Pill, Avatar, AvatarStack,
-  Eyebrow, Section, Divider, Empty, priorityTone, statusTone, timeAgo, fmtDate
+  Eyebrow, Section, Divider, Empty, Modal, Textarea, priorityTone, statusTone, timeAgo, fmtDate
 } from '../components/ui';
-import { LEAVE_TYPE_CONFIG, getLeaveTotal } from '../constants/workspace.js';
+import {
+  LEAVE_TYPE_CONFIG,
+  getLeaveTotal,
+  DASHBOARD_QUOTE_CATEGORY,
+  DASHBOARD_QUOTE_TITLE,
+} from '../constants/workspace.js';
 import { normalizeMeetLink } from '../utils/meet';
 import { isMeetingToday, isUpcomingMeeting, sortMeetingsByNextOccurrence } from '../utils/meetingSchedule';
 import { getPresence, getStatusText } from '../utils/presence';
@@ -34,13 +39,6 @@ function greet(name) {
 function todayStr() {
   return new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 }
-
-const QUOTES = [
-  { text: 'Code is poetry written for machines and read by humans.', author: 'Anonymous' },
-  { text: 'First, solve the problem. Then, write the code.', author: 'John Johnson' },
-  { text: 'Trust the process. Block by block.', author: 'DCP Team' },
-  { text: 'Small improvements compound into massive results.', author: 'James Clear' },
-];
 
 function getWeekRange(date = new Date()) {
   const current = new Date(date);
@@ -94,7 +92,7 @@ function getAnnouncementHighlights(announcement) {
 
 function WeeklyPrioritiesStrip({ announcements, users, onOpenAnnouncements }) {
   const weeklyPriorities = announcements
-    .filter((announcement) => announcement.pinned && isWithinCurrentWeek(announcement.createdAt))
+    .filter((announcement) => announcement.category !== DASHBOARD_QUOTE_CATEGORY && announcement.pinned && isWithinCurrentWeek(announcement.createdAt))
     .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
     .slice(0, 3);
 
@@ -167,12 +165,75 @@ function WeeklyPrioritiesStrip({ announcements, users, onOpenAnnouncements }) {
   );
 }
 
+function getDashboardQuoteAnnouncement(announcements) {
+  return [...announcements]
+    .filter((announcement) => announcement.category === DASHBOARD_QUOTE_CATEGORY)
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))[0] || null;
+}
+
+function QuoteComposerModal({ open, value, onChange, onClose, onSave, saving }) {
+  return (
+    <Modal open={open} onClose={onClose} title="Update Dashboard Quote" width={560}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ fontSize: 13, color: 'var(--fg-3)', lineHeight: 1.55 }}>
+          This quote will appear on every teammate's dashboard until you update it again.
+        </div>
+        <Textarea
+          label="Quote"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder="Write the quote you want everyone to see..."
+          rows={5}
+          maxLength={220}
+        />
+        <div style={{ fontSize: 11, color: 'var(--fg-3)', textAlign: 'right' }}>{value.trim().length} / 220</div>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <Button variant="ghost" onClick={onClose}>Cancel</Button>
+          <Button variant="primary" icon={Pencil} onClick={onSave} disabled={saving || !value.trim()}>
+            {saving ? 'Saving...' : 'Save Quote'}
+          </Button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
+function DashboardQuoteBlock({ quoteText, canEdit, onEdit }) {
+  return (
+    <div style={{ marginTop: 8, display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+      <p style={{ margin: 0, color: 'var(--fg-3)', fontSize: 14, lineHeight: 1.6, flex: 1 }}>
+        "{quoteText}"
+      </p>
+      {canEdit && (
+        <button
+          type="button"
+          onClick={onEdit}
+          title="Edit dashboard quote"
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 10,
+            border: '1px solid var(--border-1)',
+            background: '#fff',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            color: 'var(--fg-3)',
+            flexShrink: 0,
+          }}>
+          <Pencil size={14} />
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ─── Employee Dashboard ───────────────────────────────────────────────────────
 export default function Dashboard() {
   const { state } = useApp();
   const { currentUser, tasks, meetings, announcements, attendance, leaves, todayAttendance, users } = state;
   const navigate = useNavigate();
-  const quote = QUOTES[new Date().getDay() % QUOTES.length];
   const activeUser = users.find((user) => user.id === currentUser?.id) || currentUser;
 
   if (activeUser?.role === 'founder') return <FounderDashboard />;
@@ -197,6 +258,9 @@ export default function Dashboard() {
     const used = usedByType[type.id] || 0;
     return sum + Math.max(0, total - used);
   }, 0);
+  const dashboardQuote = getDashboardQuoteAnnouncement(announcements);
+  const quoteText = dashboardQuote?.content?.trim() || 'No workspace quote has been set yet.';
+  const visibleAnnouncements = announcements.filter((announcement) => announcement.category !== DASHBOARD_QUOTE_CATEGORY);
 
   const teamMembers = users.filter(u => u.id !== activeUser?.id);
 
@@ -209,9 +273,7 @@ export default function Dashboard() {
           <h1 style={{ margin: '6px 0 0', fontSize: 30, fontWeight: 700, letterSpacing: '-0.02em' }}>
             {greet(activeUser?.name || '')}
           </h1>
-          <p style={{ margin: '6px 0 0', color: 'var(--fg-3)', fontSize: 14 }}>
-            "{quote.text}" — <span style={{ color: 'var(--fg-2)' }}>{quote.author}</span>
-          </p>
+          <DashboardQuoteBlock quoteText={quoteText} canEdit={false} />
         </div>
         <Button variant="gradient" icon={Zap} onClick={() => navigate('/tasks')}>View my tasks</Button>
       </div>
@@ -300,7 +362,7 @@ export default function Dashboard() {
       <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16 }}>
         <Section title="Recent announcements" action={<Button variant="ghost" size="sm" iconRight={ChevronRight} onClick={() => navigate('/announcements')}>See all</Button>}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {announcements.slice(0, 3).map(a => {
+            {visibleAnnouncements.slice(0, 3).map(a => {
               const author = users.find(u => u.id === a.authorId) || a.author;
               return (
                 <Card key={a.id}>
@@ -354,10 +416,13 @@ export default function Dashboard() {
 
 // ─── Founder Dashboard ────────────────────────────────────────────────────────
 function FounderDashboard() {
-  const { state, updateLeaveStatus } = useApp();
+  const { state, updateLeaveStatus, createAnnouncement, updateAnnouncement } = useApp();
   const { currentUser, tasks, meetings, announcements, attendance, leaves, users } = state;
   const navigate = useNavigate();
-  const quote = QUOTES[new Date().getDay() % QUOTES.length];
+  const dashboardQuote = getDashboardQuoteAnnouncement(announcements);
+  const [quoteOpen, setQuoteOpen] = useState(false);
+  const [quoteDraft, setQuoteDraft] = useState(dashboardQuote?.content || '');
+  const [savingQuote, setSavingQuote] = useState(false);
 
   const today = getIstDateString();
   const todayAttendance = attendance.filter(a => a.date === today);
@@ -368,6 +433,11 @@ function FounderDashboard() {
     meetings.filter((meeting) => isUpcomingMeeting(meeting, today)),
     today
   );
+  const quoteText = dashboardQuote?.content?.trim() || 'Set a workspace quote for the team.';
+
+  useEffect(() => {
+    setQuoteDraft(dashboardQuote?.content || '');
+  }, [dashboardQuote?.id, dashboardQuote?.content]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 28, maxWidth: 1400, margin: '0 auto' }} className="fade-in">
@@ -378,9 +448,7 @@ function FounderDashboard() {
           <h1 style={{ margin: '6px 0 0', fontSize: 30, fontWeight: 700, letterSpacing: '-0.02em' }}>
             {greet(currentUser?.name || '')} <span className="text-gradient">Here's the overview.</span>
           </h1>
-          <p style={{ margin: '6px 0 0', color: 'var(--fg-3)', fontSize: 14 }}>
-            "{quote.text}" — <span style={{ color: 'var(--fg-2)' }}>{quote.author}</span>
-          </p>
+          <DashboardQuoteBlock quoteText={quoteText} canEdit onEdit={() => setQuoteOpen(true)} />
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           <Button variant="secondary" icon={Users} onClick={() => navigate('/admin')}>Manage Team</Button>
@@ -522,6 +590,36 @@ function FounderDashboard() {
           })}
         </div>
       </Section>
+
+      <QuoteComposerModal
+        open={quoteOpen}
+        value={quoteDraft}
+        onChange={setQuoteDraft}
+        onClose={() => setQuoteOpen(false)}
+        onSave={async () => {
+          const nextQuote = quoteDraft.trim();
+          if (!nextQuote) return;
+          setSavingQuote(true);
+          try {
+            if (dashboardQuote?.id) {
+              await updateAnnouncement(dashboardQuote.id, { content: nextQuote });
+            } else {
+              await createAnnouncement({
+                title: DASHBOARD_QUOTE_TITLE,
+                content: nextQuote,
+                category: DASHBOARD_QUOTE_CATEGORY,
+                pinned: false,
+              });
+            }
+            setQuoteOpen(false);
+          } catch (err) {
+            alert(err.message);
+          } finally {
+            setSavingQuote(false);
+          }
+        }}
+        saving={savingQuote}
+      />
     </div>
   );
 }

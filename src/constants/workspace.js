@@ -17,6 +17,9 @@ export const LEAVE_TYPE_CONFIG = [
   { id: 'Unpaid', label: 'Unpaid Leave', balanceKey: 'unpaidLeaveTotal' },
 ];
 
+export const DASHBOARD_QUOTE_CATEGORY = 'Dashboard Quote';
+export const DASHBOARD_QUOTE_TITLE = 'Workspace Quote';
+
 export function getLeaveTotal(user, typeId) {
   const config = LEAVE_TYPE_CONFIG.find((item) => item.id === typeId);
   if (!config) return 0;
