@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Hash, Plus, Send, Paperclip, Users, X, File, Image, CheckCheck, Smile, Trash2, Download, ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar, IconBtn, Button, Empty, Modal, Input, fmtTime } from '../components/ui';
@@ -17,6 +17,7 @@ export default function Messages() {
   } = useApp();
   const { currentUser, channels, channelMessages, channelSeenBy, users, typingByChannel } = state;
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [activeId, setActiveId] = useState(null);
   const [draft, setDraft] = useState('');
@@ -87,6 +88,14 @@ export default function Messages() {
       setActiveId(conversations[0].id);
     }
   }, [conversations, activeId]);
+
+  useEffect(() => {
+    const requestedChannelId = location.state?.activeChannelId;
+    if (!requestedChannelId) return;
+    if (requestedChannelId === activeId) return;
+    if (!channels.some((channel) => channel.id === requestedChannelId)) return;
+    setActiveId(requestedChannelId);
+  }, [location.state, channels, activeId]);
 
   // Tell AppContext which channel is currently open (so it can suppress
   // toast/sound for messages we're already looking at) + clean up on unmount

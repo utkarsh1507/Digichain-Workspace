@@ -1,12 +1,12 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, CheckSquare, MessageSquare, Calendar, Clock,
   PalmtreeIcon, Folder, Megaphone, User, Users, LogOut,
-  Bell, Settings, ChevronUp, Video,
+  Bell, Settings, ChevronUp, Video, Search, Hash, Command, ArrowRight,
 } from 'lucide-react';
 import { useApp } from '../../context/AppContext';
-import { Avatar, IconBtn, NotificationToast, Modal, Button } from '../ui';
+import { Avatar, IconBtn, NotificationToast, Modal, Button, Pill } from '../ui';
 import { requestNotificationPermission, getNotificationPermission } from '../../utils/notifications';
 import { STATUS_PRESETS, getPresence, getStatusMeta, getStatusText, getUserSubtitle } from '../../utils/presence';
 
@@ -45,6 +45,141 @@ const FOUNDER_NAV = [
   },
 ];
 
+const PALETTE_GROUP_ORDER = ['Navigate', 'People', 'Channels', 'Announcements'];
+
+function normalizeSearchText(value = '') {
+  return String(value).toLowerCase().trim();
+}
+
+function matchesQuery(item, query) {
+  if (!query) return true;
+  const haystack = normalizeSearchText([
+    item.label,
+    item.subtitle,
+    item.keywords,
+  ].filter(Boolean).join(' '));
+  return query.split(/\s+/).every((part) => haystack.includes(part));
+}
+
+function CommandPalette({ open, query, onQueryChange, onClose, results, selectedIndex, onSelectIndex, onRunItem }) {
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const timer = setTimeout(() => inputRef.current?.focus(), 10);
+    return () => clearTimeout(timer);
+  }, [open]);
+
+  const grouped = PALETTE_GROUP_ORDER
+    .map((group) => ({
+      group,
+      items: results.filter((item) => item.group === group),
+    }))
+    .filter((entry) => entry.items.length > 0);
+
+  return (
+    <Modal open={open} onClose={onClose} title="Command Palette" width={760}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 14, background: 'linear-gradient(135deg, #f9fbff 0%, #fff8ef 100%)', border: '1px solid rgba(121, 98, 255, 0.12)' }}>
+          <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--brand-gradient)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', boxShadow: '0 12px 28px rgba(99, 102, 241, 0.22)' }}>
+            <Command size={18} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fg-1)' }}>Jump anywhere fast</div>
+            <div style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 2 }}>Search pages, people, announcements, and channels. Use arrow keys and press Enter.</div>
+          </div>
+          <Pill tone="neutral">Ctrl K</Pill>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 14px', borderRadius: 14, border: '1px solid var(--border-1)', background: '#fff', boxShadow: '0 8px 18px rgba(15, 23, 42, 0.04)' }}>
+          <Search size={16} color="var(--fg-3)" />
+          <input
+            ref={inputRef}
+            value={query}
+            onChange={(event) => onQueryChange(event.target.value)}
+            placeholder="Search for dashboard, a teammate, a channel, or an announcement..."
+            autoComplete="off"
+            onKeyDown={(event) => {
+              if (event.key === 'ArrowDown') {
+                event.preventDefault();
+                onSelectIndex(Math.min(selectedIndex + 1, Math.max(results.length - 1, 0)));
+              } else if (event.key === 'ArrowUp') {
+                event.preventDefault();
+                onSelectIndex(Math.max(selectedIndex - 1, 0));
+              } else if (event.key === 'Enter') {
+                event.preventDefault();
+                const item = results[selectedIndex];
+                if (item) onRunItem(item);
+              }
+            }}
+            style={{ flex: 1, border: 'none', outline: 'none', background: 'transparent', padding: '14px 0', fontFamily: 'inherit', fontSize: 14, color: 'var(--fg-1)' }}
+          />
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, fontSize: 12, color: 'var(--fg-3)' }}>
+          <span>{results.length} result{results.length === 1 ? '' : 's'}</span>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <Pill tone="neutral">Enter to open</Pill>
+            <Pill tone="neutral">Esc to close</Pill>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxHeight: '52vh', overflowY: 'auto', paddingRight: 4 }}>
+          {grouped.length === 0 ? (
+            <div style={{ padding: '30px 10px', textAlign: 'center', color: 'var(--fg-3)' }}>
+              <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg-2)' }}>No matching commands</div>
+              <div style={{ marginTop: 4, fontSize: 12 }}>Try a page name, teammate name, or part of an announcement title.</div>
+            </div>
+          ) : grouped.map(({ group, items }) => (
+            <div key={group} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--fg-3)' }}>{group}</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {items.map((item) => {
+                  const isActive = results[selectedIndex]?.id === item.id;
+                  const Icon = item.icon;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onMouseEnter={() => onSelectIndex(results.findIndex((entry) => entry.id === item.id))}
+                      onClick={() => onRunItem(item)}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        padding: '12px 14px',
+                        borderRadius: 14,
+                        border: isActive ? '1px solid rgba(123, 97, 255, 0.22)' : '1px solid var(--border-1)',
+                        background: isActive ? 'linear-gradient(135deg, rgba(123, 97, 255, 0.08) 0%, rgba(245, 180, 84, 0.08) 100%)' : '#fff',
+                        cursor: 'pointer',
+                        textAlign: 'left',
+                        fontFamily: 'inherit',
+                      }}>
+                      <div style={{ width: 38, height: 38, borderRadius: 12, background: isActive ? 'var(--accent-tint)' : 'var(--bg-1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: isActive ? 'var(--accent)' : 'var(--fg-3)', flexShrink: 0 }}>
+                        {item.avatar ? (
+                          <Avatar name={item.label} size={38} src={item.avatar} />
+                        ) : (
+                          Icon ? <Icon size={17} /> : <Hash size={17} />
+                        )}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--fg-1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</div>
+                        <div style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.subtitle}</div>
+                      </div>
+                      {item.badge && <Pill tone="accent">{item.badge}</Pill>}
+                      <ArrowRight size={15} color="var(--fg-4)" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function NavItem({ icon: Icon, label, path, active, onClick, badge }) {
   const [hover, setHover] = useState(false);
   return (
@@ -74,7 +209,7 @@ function NavItem({ icon: Icon, label, path, active, onClick, badge }) {
 
 export function Shell({ children }) {
   const { state, logout, toasts, dismissToast, updateUser } = useApp();
-  const { currentUser, leaves, unreadCounts, announcements } = state;
+  const { currentUser, leaves, unreadCounts, announcements, users, channels } = state;
   const navigate = useNavigate();
   const location = useLocation();
   const [profileOpen, setProfileOpen] = useState(false);
@@ -83,6 +218,9 @@ export function Shell({ children }) {
   const [statusDraft, setStatusDraft] = useState({ statusPreset: 'working', statusMessage: '' });
   const [savingStatus, setSavingStatus] = useState(false);
   const [statusPickerOpen, setStatusPickerOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [commandQuery, setCommandQuery] = useState('');
+  const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
 
   // Ask for desktop notification permission on first mount (one-time soft prompt)
   useEffect(() => {
@@ -152,6 +290,132 @@ export function Shell({ children }) {
     : NAV;
   const myPresence = getPresence(currentUser);
   const myStatusMeta = getStatusMeta(currentUser?.statusPreset);
+  const paletteItems = [
+    ...navGroups.flatMap((group) => group.items.map((item) => ({
+      id: `nav:${item.path}`,
+      group: 'Navigate',
+      label: item.label,
+      subtitle: `Open ${item.label.toLowerCase()}`,
+      badge: group.label,
+      icon: item.icon,
+      keywords: `${group.label} ${item.label} ${item.path}`,
+      run: () => navigate(item.path),
+    }))),
+    ...users
+      .filter((user) => user.id !== currentUser?.id)
+      .map((user) => ({
+        id: `user:${user.id}`,
+        group: 'People',
+        label: user.name,
+        subtitle: `${user.title || user.role} · ${user.department || 'Workspace'}`,
+        badge: 'Profile',
+        avatar: user.avatar,
+        icon: User,
+        keywords: `${user.name} ${user.title || ''} ${user.department || ''} ${user.role || ''}`,
+        run: () => navigate(`/profile/${user.id}`),
+      })),
+    ...channels.map((channel) => {
+      const isDm = channel.type === 'dm';
+      const otherUser = isDm
+        ? users.find((user) => (channel.memberIds || []).includes(user.id) && user.id !== currentUser?.id)
+        : null;
+      const label = isDm ? (otherUser?.name || 'Direct message') : (channel.name || 'Channel');
+      const subtitle = isDm
+        ? `Open DM with ${otherUser?.name || 'teammate'}`
+        : channel.description || 'Jump into this channel';
+
+      return {
+        id: `channel:${channel.id}`,
+        group: 'Channels',
+        label,
+        subtitle,
+        badge: isDm ? 'DM' : 'Channel',
+        icon: isDm ? MessageSquare : Hash,
+        avatar: isDm ? otherUser?.avatar : null,
+        keywords: `${label} ${subtitle} ${(channel.name || '')} ${(channel.description || '')}`,
+        run: () => navigate('/messages', { state: { activeChannelId: channel.id } }),
+      };
+    }),
+    ...announcements.slice(0, 8).map((announcement) => ({
+      id: `announcement:${announcement.id}`,
+      group: 'Announcements',
+      label: announcement.title,
+      subtitle: announcement.content || announcement.body || 'Open announcement board',
+      badge: announcement.pinned ? 'Pinned' : (announcement.category || 'Post'),
+      icon: Megaphone,
+      keywords: `${announcement.title} ${announcement.content || ''} ${announcement.category || ''}`,
+      run: () => navigate('/announcements'),
+    })),
+  ];
+  const filteredCommands = paletteItems.filter((item) => matchesQuery(item, normalizeSearchText(commandQuery)));
+
+  function openCommandPalette() {
+    setCommandOpen(true);
+  }
+
+  function closeCommandPalette() {
+    setCommandOpen(false);
+    setCommandQuery('');
+    setSelectedCommandIndex(0);
+  }
+
+  function runCommandItem(item) {
+    if (!item) return;
+    closeCommandPalette();
+    item.run?.();
+  }
+
+  useEffect(() => {
+    if (!commandOpen) return undefined;
+
+    const handleKeyDown = (event) => {
+      const isModifierK = (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k';
+      if (isModifierK) {
+        event.preventDefault();
+        closeCommandPalette();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [commandOpen]);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      const target = event.target;
+      const isEditable = target instanceof HTMLElement && (
+        target.isContentEditable ||
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)
+      );
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setCommandOpen((prev) => !prev);
+        if (commandOpen) {
+          setCommandQuery('');
+          setSelectedCommandIndex(0);
+        }
+      } else if (!commandOpen && !isEditable && event.key === '/') {
+        event.preventDefault();
+        openCommandPalette();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [commandOpen]);
+
+  useEffect(() => {
+    setSelectedCommandIndex(0);
+  }, [commandQuery, commandOpen]);
+
+  useEffect(() => {
+    if (!commandOpen && commandQuery) setCommandQuery('');
+  }, [commandOpen, commandQuery]);
+
+  useEffect(() => {
+    if (commandOpen) closeCommandPalette();
+  }, [location.pathname]);
 
   return (
     <div style={{ display: 'flex', height: '100vh', background: 'var(--bg-0)', overflow: 'hidden' }}>
@@ -323,7 +587,30 @@ export function Shell({ children }) {
           background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(12px)',
           display: 'flex', alignItems: 'center', gap: 14, padding: '0 24px',
           position: 'sticky', top: 0, zIndex: 10 }}>
-          <div style={{ flex: 1 }} />
+          <div style={{ flex: 1 }}>
+            <button
+              type="button"
+              onClick={openCommandPalette}
+              style={{
+                minWidth: 280,
+                maxWidth: 360,
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '10px 12px',
+                borderRadius: 12,
+                border: '1px solid var(--border-1)',
+                background: 'rgba(255,255,255,0.92)',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                boxShadow: '0 10px 20px rgba(15, 23, 42, 0.04)',
+              }}>
+              <Search size={15} color="var(--fg-3)" />
+              <span style={{ flex: 1, textAlign: 'left', fontSize: 13, color: 'var(--fg-3)' }}>Search workspace, people, channels...</span>
+              <Pill tone="neutral">Ctrl K</Pill>
+            </button>
+          </div>
           <IconBtn
             icon={Bell}
             badge={totalUnread + (currentUser?.role === 'founder' ? pendingLeaves : 0)}
@@ -354,6 +641,17 @@ export function Shell({ children }) {
           </Button>
         </div>
       </Modal>
+
+      <CommandPalette
+        open={commandOpen}
+        query={commandQuery}
+        onQueryChange={setCommandQuery}
+        onClose={closeCommandPalette}
+        results={filteredCommands}
+        selectedIndex={selectedCommandIndex}
+        onSelectIndex={setSelectedCommandIndex}
+        onRunItem={runCommandItem}
+      />
 
       {/* Friendly notification permission prompt */}
       {showNotifyPrompt && (

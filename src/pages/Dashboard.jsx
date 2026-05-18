@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Zap, Plus, Check, Clock, Video, ChevronRight, TrendingUp,
-  Users, ClipboardList, CalendarCheck, AlertCircle, CheckCircle2
+  Users, ClipboardList, CalendarCheck, AlertCircle, CheckCircle2, Target
 } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import {
@@ -41,6 +41,131 @@ const QUOTES = [
   { text: 'Trust the process. Block by block.', author: 'DCP Team' },
   { text: 'Small improvements compound into massive results.', author: 'James Clear' },
 ];
+
+function getWeekRange(date = new Date()) {
+  const current = new Date(date);
+  const day = current.getDay();
+  const diffToMonday = (day + 6) % 7;
+  const start = new Date(current);
+  start.setHours(0, 0, 0, 0);
+  start.setDate(current.getDate() - diffToMonday);
+
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  end.setHours(23, 59, 59, 999);
+  return { start, end };
+}
+
+function isWithinCurrentWeek(value) {
+  if (!value) return false;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return false;
+  const { start, end } = getWeekRange();
+  return date >= start && date <= end;
+}
+
+function formatWeekLabel() {
+  const { start, end } = getWeekRange();
+  const sameMonth = start.getMonth() === end.getMonth();
+  const sameYear = start.getFullYear() === end.getFullYear();
+  const startLabel = start.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  const endLabel = end.toLocaleDateString('en-IN', { day: 'numeric', month: sameMonth ? undefined : 'short', year: sameYear ? undefined : 'numeric' });
+  return `${startLabel} - ${endLabel}`;
+}
+
+function getAnnouncementHighlights(announcement) {
+  const body = String(announcement?.content || announcement?.body || '');
+  const bullets = body
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.replace(/^[-*•]\s*/, ''))
+    .filter(Boolean);
+
+  if (bullets.length > 1) return bullets.slice(0, 3);
+  if (!body.trim()) return [];
+
+  return body
+    .split(/[.!?]\s+/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .slice(0, 2);
+}
+
+function WeeklyPrioritiesStrip({ announcements, users, onOpenAnnouncements }) {
+  const weeklyPriorities = announcements
+    .filter((announcement) => announcement.pinned && isWithinCurrentWeek(announcement.createdAt))
+    .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+    .slice(0, 3);
+
+  return (
+    <Card style={{ padding: 0, overflow: 'hidden', background: 'linear-gradient(135deg, #fffaf3 0%, #fff 52%, #f8fbff 100%)', border: '1px solid rgba(221, 188, 127, 0.26)' }}>
+      <div style={{ padding: '16px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 14, borderBottom: '1px solid rgba(221, 188, 127, 0.18)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ width: 42, height: 42, borderRadius: 14, background: 'linear-gradient(135deg, #f7d48d 0%, #f1b95d 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#7a4b00', boxShadow: '0 10px 24px rgba(209, 146, 35, 0.18)' }}>
+            <Target size={18} />
+          </div>
+          <div>
+            <Eyebrow>Weekly Priorities</Eyebrow>
+            <div style={{ marginTop: 4, fontSize: 14, color: 'var(--fg-2)' }}>Shared focus for {formatWeekLabel()}</div>
+          </div>
+        </div>
+        <Button variant="ghost" size="sm" iconRight={ChevronRight} onClick={onOpenAnnouncements}>Open board</Button>
+      </div>
+
+      {weeklyPriorities.length === 0 ? (
+        <div style={{ padding: '18px 18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg-1)' }}>No pinned priorities for this week yet</div>
+            <div style={{ marginTop: 4, fontSize: 12, color: 'var(--fg-3)' }}>
+              Pin an announcement in the weekly planning thread to turn it into the team goals strip.
+            </div>
+          </div>
+          <Pill tone="warning">Waiting for priorities</Pill>
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${weeklyPriorities.length}, minmax(0, 1fr))`, gap: 0 }}>
+          {weeklyPriorities.map((announcement, index) => {
+            const author = users.find((user) => user.id === announcement.authorId) || announcement.author;
+            const highlights = getAnnouncementHighlights(announcement);
+            return (
+              <div
+                key={announcement.id}
+                onClick={onOpenAnnouncements}
+                style={{ padding: '18px 18px 20px', borderLeft: index > 0 ? '1px solid rgba(221, 188, 127, 0.16)' : 'none', cursor: 'pointer' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255, 250, 243, 0.7)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
+                  <Pill tone="accent">Pinned</Pill>
+                  {announcement.category && <Pill tone="neutral">{announcement.category}</Pill>}
+                  <span style={{ fontSize: 11, color: 'var(--fg-3)', marginLeft: 'auto' }}>{timeAgo(announcement.createdAt)}</span>
+                </div>
+                <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg-1)', lineHeight: 1.35 }}>{announcement.title}</div>
+                {highlights.length > 0 && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 12 }}>
+                    {highlights.map((highlight) => (
+                      <div key={highlight} style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                        <span style={{ width: 7, height: 7, borderRadius: 999, background: 'linear-gradient(135deg, #f0bd63 0%, #e38a43 100%)', marginTop: 6, flexShrink: 0 }} />
+                        <span style={{ fontSize: 12.5, lineHeight: 1.55, color: 'var(--fg-2)' }}>{highlight}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 16 }}>
+                  <Avatar name={author?.name || ''} size={28} src={author?.avatar} />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-1)' }}>{author?.name || 'Workspace'}</div>
+                    <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>Shared team focus</div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </Card>
+  );
+}
 
 // ─── Employee Dashboard ───────────────────────────────────────────────────────
 export default function Dashboard() {
@@ -102,6 +227,12 @@ export default function Dashboard() {
           sub={upcomingMeetings.length > 0 ? `Next: ${upcomingMeetings[0]?.time}` : 'No meetings'} icon={CalendarCheck} />
         <StatCard label="Leave Balance" value={leaveBalance} sub="Days remaining · 2026" icon={Clock} />
       </div>
+
+      <WeeklyPrioritiesStrip
+        announcements={announcements}
+        users={users}
+        onOpenAnnouncements={() => navigate('/announcements')}
+      />
 
       {/* Main grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.6fr 1fr', gap: 16 }}>
@@ -265,6 +396,12 @@ function FounderDashboard() {
         <StatCard label="Meetings Today" value={upcomingMeetings.filter((meeting) => isMeetingToday(meeting, today)).length} sub={`${upcomingMeetings.length} total upcoming`} icon={CalendarCheck} />
         <StatCard label="Team Size" value={users.length} sub={`${users.filter(u => u.role === 'intern').length} interns`} icon={Users} />
       </div>
+
+      <WeeklyPrioritiesStrip
+        announcements={announcements}
+        users={users}
+        onOpenAnnouncements={() => navigate('/announcements')}
+      />
 
       {/* Main grid */}
       <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: 16 }}>
