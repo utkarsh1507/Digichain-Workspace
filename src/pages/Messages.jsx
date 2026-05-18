@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Hash, Plus, Send, Paperclip, Users, X, File, Image, CheckCheck, Smile, Trash2, Download } from 'lucide-react';
+import { Hash, Plus, Send, Paperclip, Users, X, File, Image, CheckCheck, Smile, Trash2, Download, ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Avatar, IconBtn, Button, Empty, Modal, Input, fmtTime } from '../components/ui';
 import { messagesApi } from '../api/index.js';
@@ -21,6 +21,12 @@ export default function Messages() {
   const [activeId, setActiveId] = useState(null);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [collapsedSections, setCollapsedSections] = useState({
+    channels: false,
+    dms: false,
+    newDm: false,
+  });
   const [newChannelOpen, setNewChannelOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const [channelForm, setChannelForm] = useState({ name: '', description: '', emoji: CHANNEL_ICON_OPTIONS[0].value, memberIds: [] });
@@ -398,75 +404,160 @@ export default function Messages() {
     return `${getDayDividerLabel(timestamp)} at ${fmtTime(timestamp)}`;
   }
 
+  function toggleSection(sectionKey) {
+    setCollapsedSections((prev) => ({ ...prev, [sectionKey]: !prev[sectionKey] }));
+  }
+
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: '280px 1fr',
-      height: 'calc(100vh - 112px)',
-      border: '1px solid var(--border-1)',
-      borderRadius: 16,
+      gridTemplateColumns: sidebarCollapsed ? '84px 1fr' : '320px 1fr',
+      width: 'calc(100% + 64px)',
+      height: 'calc(100vh - 56px)',
+      margin: '-28px -32px',
       overflow: 'hidden',
-      background: '#fff',
-      maxWidth: 1400,
-      margin: '0 auto',
+      background: 'linear-gradient(180deg, #fbfbfe 0%, #f4f6fb 100%)',
+      transition: 'grid-template-columns 180ms ease',
     }} className="fade-in">
 
       {/* ── Sidebar ─────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--border-1)', background: 'var(--bg-1)', overflow: 'hidden' }}>
-        {/* Lists */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 8px 6px' }}>
-          {/* Channels */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 6px 4px' }}>
-            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', color: 'var(--fg-4)' }}>Channels</span>
-            <button onClick={() => setNewChannelOpen(true)}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', display: 'flex', padding: 2, borderRadius: 4 }}>
-              <Plus size={13} />
-            </button>
-          </div>
-          {myChannels.map(c => (
-            <ConvItem key={c.id} conv={c} active={c.id === activeId}
-              name={getConvName(c)} last={getLastMsg(c.id)}
-              unread={state.unreadCounts?.[c.id] || 0}
-              onClick={() => handleSwitchChannel(c.id)} />
-          ))}
-
-          {/* DMs */}
-          <div style={{ padding: '12px 6px 4px' }}>
-            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', color: 'var(--fg-4)' }}>Direct Messages</span>
-          </div>
-          {myDMs.map(d => (
-            <ConvItem key={d.id} conv={d} active={d.id === activeId}
-              name={getConvName(d)} last={getLastMsg(d.id)}
-              avatar={getConvAvatar(d)}
-              user={getDMOtherUser(d)}
-              unread={state.unreadCounts?.[d.id] || 0}
-              onClick={() => handleSwitchChannel(d.id)} />
-          ))}
-
-          {/* New DM */}
-          <div style={{ padding: '12px 6px 4px' }}>
-            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase', color: 'var(--fg-4)' }}>New DM</span>
-          </div>
-          {users.filter(u => u.id !== currentUser?.id).map(u => (
-            <div key={u.id} onClick={() => handleDMUser(u.id)}
-              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 8px', borderRadius: 8, cursor: 'pointer' }}
-              onMouseEnter={e => e.currentTarget.style.background = 'var(--bg-3)'}
-              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}>
-              <Avatar name={u.name} size={24} src={u.avatar} status={getPresence(u, now).state} />
-              <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg-1)' }}>{u.name.split(' ')[0]}</span>
-              <span style={{ fontSize: 11, color: 'var(--fg-4)', marginLeft: 'auto' }}>{getUserSubtitle(u, now)}</span>
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        borderRight: '1px solid rgba(132, 142, 168, 0.18)',
+        background: 'linear-gradient(180deg, rgba(255,255,255,0.88) 0%, rgba(249,250,255,0.96) 100%)',
+        overflow: 'hidden',
+        backdropFilter: 'blur(12px)',
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: sidebarCollapsed ? 'center' : 'space-between',
+          padding: sidebarCollapsed ? '16px 12px 10px' : '16px 16px 10px',
+          borderBottom: '1px solid rgba(132, 142, 168, 0.14)',
+          flexShrink: 0,
+        }}>
+          {!sidebarCollapsed && (
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--fg-1)' }}>Messages</div>
+              <div style={{ fontSize: 11, color: 'var(--fg-3)' }}>
+                {conversations.length} conversation{conversations.length !== 1 ? 's' : ''}
+              </div>
             </div>
-          ))}
+          )}
+          <button
+            type="button"
+            onClick={() => setSidebarCollapsed((prev) => !prev)}
+            title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 10,
+              border: '1px solid rgba(132, 142, 168, 0.16)',
+              background: '#fff',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              color: 'var(--fg-3)',
+              boxShadow: '0 6px 18px rgba(15, 23, 42, 0.05)',
+            }}>
+            {sidebarCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          </button>
+        </div>
+        {/* Lists */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: sidebarCollapsed ? '12px 8px 10px' : '16px 12px 12px' }}>
+          <SectionBlock
+            title="Channels"
+            count={myChannels.length}
+            collapsed={collapsedSections.channels}
+            compact={sidebarCollapsed}
+            onToggle={() => toggleSection('channels')}
+            action={!sidebarCollapsed ? (
+              <button onClick={() => setNewChannelOpen(true)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--fg-3)', display: 'flex', padding: 2, borderRadius: 6 }}>
+                <Plus size={13} />
+              </button>
+            ) : null}>
+            {myChannels.map(c => (
+              <ConvItem key={c.id} conv={c} compact={sidebarCollapsed} active={c.id === activeId}
+                name={getConvName(c)} last={getLastMsg(c.id)}
+                unread={state.unreadCounts?.[c.id] || 0}
+                onClick={() => handleSwitchChannel(c.id)} />
+            ))}
+          </SectionBlock>
+
+          <SectionBlock
+            title="Direct Messages"
+            count={myDMs.length}
+            collapsed={collapsedSections.dms}
+            compact={sidebarCollapsed}
+            onToggle={() => toggleSection('dms')}>
+            {myDMs.map(d => (
+              <ConvItem key={d.id} conv={d} compact={sidebarCollapsed} active={d.id === activeId}
+                name={getConvName(d)} last={getLastMsg(d.id)}
+                avatar={getConvAvatar(d)}
+                user={getDMOtherUser(d)}
+                unread={state.unreadCounts?.[d.id] || 0}
+                onClick={() => handleSwitchChannel(d.id)} />
+            ))}
+          </SectionBlock>
+
+          <SectionBlock
+            title="New DM"
+            count={users.filter(u => u.id !== currentUser?.id).length}
+            collapsed={collapsedSections.newDm}
+            compact={sidebarCollapsed}
+            onToggle={() => toggleSection('newDm')}>
+            {users.filter(u => u.id !== currentUser?.id).map(u => (
+              <div key={u.id} onClick={() => handleDMUser(u.id)}
+                title={sidebarCollapsed ? u.name : undefined}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: sidebarCollapsed ? 'center' : 'flex-start',
+                  gap: 8,
+                  padding: sidebarCollapsed ? '8px 6px' : '8px 10px',
+                  borderRadius: 12,
+                  cursor: 'pointer',
+                  transition: 'background 120ms ease, transform 120ms ease',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = 'rgba(131, 111, 255, 0.08)';
+                  e.currentTarget.style.transform = 'translateX(1px)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = 'transparent';
+                  e.currentTarget.style.transform = 'translateX(0)';
+                }}>
+                <Avatar name={u.name} size={28} src={u.avatar} status={getPresence(u, now).state} />
+                {!sidebarCollapsed && (
+                  <>
+                    <span style={{ fontSize: 12, fontWeight: 500, color: 'var(--fg-1)' }}>{u.name.split(' ')[0]}</span>
+                    <span style={{ fontSize: 11, color: 'var(--fg-4)', marginLeft: 'auto' }}>{getUserSubtitle(u, now)}</span>
+                  </>
+                )}
+              </div>
+            ))}
+          </SectionBlock>
         </div>
       </div>
 
       {/* ── Thread ──────────────────────────────────────────────────────── */}
-      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, height: '100%', overflow: 'hidden' }}>
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        minWidth: 0,
+        height: '100%',
+        overflow: 'hidden',
+        background: 'linear-gradient(180deg, rgba(255,255,255,0.94) 0%, rgba(250,251,255,0.96) 100%)',
+      }}>
         {active ? (
           <>
             {/* Header */}
-            <div style={{ padding: '12px 18px', borderBottom: '1px solid var(--border-1)', display: 'flex', alignItems: 'center',
-              justifyContent: 'space-between', flexShrink: 0, background: '#fff' }}>
+            <div style={{ padding: '14px 20px', borderBottom: '1px solid rgba(132, 142, 168, 0.14)', display: 'flex', alignItems: 'center',
+              justifyContent: 'space-between', flexShrink: 0, background: 'rgba(255,255,255,0.74)', backdropFilter: 'blur(10px)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 {active.type === 'dm'
                   ? <button
@@ -513,7 +604,7 @@ export default function Messages() {
             </div>
 
             {/* Messages area */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '22px 24px 16px', display: 'flex', flexDirection: 'column', gap: 2 }}>
               {activeMsgs.length === 0
                 ? <Empty icon={Hash} title="No messages yet" hint="Be the first to say something!" />
                 : activeMsgs.map((m, i) => {
@@ -769,7 +860,7 @@ export default function Messages() {
             </div>
 
             {/* Input area */}
-            <div style={{ padding: '10px 14px', borderTop: '1px solid var(--border-1)', flexShrink: 0, background: '#fff' }}>
+            <div style={{ padding: '14px 18px 18px', borderTop: '1px solid rgba(132, 142, 168, 0.14)', flexShrink: 0, background: 'rgba(255,255,255,0.82)', backdropFilter: 'blur(10px)' }}>
               {/* File preview */}
               {attachedFile && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px', marginBottom: 6,
@@ -995,14 +1086,66 @@ export default function Messages() {
   );
 }
 
-function ConvItem({ conv, active, name, last, unread, onClick, avatar, user }) {
+function SectionBlock({ title, count, collapsed, compact, onToggle, action, children }) {
+  return (
+    <div style={{
+      marginBottom: compact ? 10 : 14,
+      border: compact ? 'none' : '1px solid rgba(132, 142, 168, 0.12)',
+      borderRadius: compact ? 0 : 16,
+      background: compact ? 'transparent' : 'rgba(255,255,255,0.68)',
+      boxShadow: compact ? 'none' : '0 10px 30px rgba(15, 23, 42, 0.035)',
+      overflow: 'hidden',
+    }}>
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: compact ? 'center' : 'space-between',
+        padding: compact ? '4px 0' : '10px 12px 6px',
+      }}>
+        <button
+          type="button"
+          onClick={onToggle}
+          title={compact ? title : undefined}
+          style={{
+            border: 'none',
+            background: 'transparent',
+            padding: compact ? 6 : 0,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+            cursor: 'pointer',
+            color: 'var(--fg-3)',
+            fontFamily: 'inherit',
+          }}>
+          {collapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+          {!compact && (
+            <>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.10em', textTransform: 'uppercase' }}>{title}</span>
+              <span style={{ fontSize: 10, color: 'var(--fg-4)' }}>{count}</span>
+            </>
+          )}
+        </button>
+        {!compact && action}
+      </div>
+      {!collapsed && (
+        <div style={{ padding: compact ? '0' : '4px 6px 8px' }}>
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ConvItem({ conv, active, name, last, unread, onClick, avatar, user, compact = false }) {
   const [hover, setHover] = useState(false);
   const presence = getPresence(user);
   return (
     <div onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
-      style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 10px', borderRadius: 10,
-        background: active ? '#fff' : hover ? 'var(--bg-3)' : 'transparent',
-        boxShadow: active ? 'var(--shadow-xs)' : 'none', cursor: 'pointer', transition: 'background 120ms' }}>
+      title={compact ? name : undefined}
+      style={{ display: 'flex', alignItems: 'center', justifyContent: compact ? 'center' : 'flex-start', gap: 10, padding: compact ? '10px 6px' : '9px 10px', borderRadius: 12,
+        background: active ? '#fff' : hover ? 'rgba(131, 111, 255, 0.08)' : 'transparent',
+        boxShadow: active ? '0 10px 24px rgba(99, 102, 241, 0.12)' : 'none', cursor: 'pointer', transition: 'background 120ms, transform 120ms, box-shadow 120ms',
+        transform: hover && !active ? 'translateX(1px)' : 'translateX(0)', position: 'relative' }}>
       {conv.type === 'dm'
         ? <Avatar name={name} size={30} src={avatar} status={presence.state} />
         : <span style={{ width: 30, height: 30, borderRadius: 8, background: active ? 'var(--accent-tint)' : 'var(--bg-2)',
@@ -1010,17 +1153,20 @@ function ConvItem({ conv, active, name, last, unread, onClick, avatar, user }) {
             color: active ? 'var(--accent)' : 'var(--fg-3)', fontWeight: 700, flexShrink: 0 }}>
             {getChannelEmoji(conv)}
           </span>}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13, fontWeight: unread > 0 ? 700 : (active ? 700 : 500), color: 'var(--fg-1)',
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
-        <div style={{ fontSize: 11, color: unread > 0 ? 'var(--fg-2)' : 'var(--fg-4)',
-          fontWeight: unread > 0 ? 600 : 400,
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{last}</div>
-      </div>
+      {!compact && (
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: unread > 0 ? 700 : (active ? 700 : 500), color: 'var(--fg-1)',
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{name}</div>
+          <div style={{ fontSize: 11, color: unread > 0 ? 'var(--fg-2)' : 'var(--fg-4)',
+            fontWeight: unread > 0 ? 600 : 400,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{last}</div>
+        </div>
+      )}
       {unread > 0 && (
         <span style={{ minWidth: 18, height: 18, borderRadius: 999, background: 'var(--accent)',
           color: '#fff', fontSize: 10, fontWeight: 700,
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', flexShrink: 0 }}>
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px', flexShrink: 0,
+          position: compact ? 'absolute' : 'static', marginLeft: compact ? 22 : 0, marginTop: compact ? -22 : 0 }}>
           {unread > 99 ? '99+' : unread}
         </span>
       )}
