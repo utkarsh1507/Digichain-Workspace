@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus, Trash2, Edit3, Save, Users, ShieldCheck, UserCheck, TrendingUp, Lock } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { Card, StatCard, Button, IconBtn, Pill, Eyebrow, Section, Modal, Input, Select, Avatar, fmtDate } from '../components/ui';
+import { LEAVE_TYPE_CONFIG } from '../constants/workspace.js';
 
 const ROLES = ['founder', 'employee', 'intern'];
 const DEPARTMENTS = ['Engineering', 'Operations', 'Marketing', 'Leadership', 'Design', 'Sales'];
@@ -29,6 +30,11 @@ function createMemberForm() {
     role: 'employee',
     phone: '',
     joinDate: new Date().toISOString().split('T')[0],
+    casualLeaveTotal: 0,
+    sickLeaveTotal: 0,
+    earnedLeaveTotal: 0,
+    wfhLeaveTotal: 0,
+    unpaidLeaveTotal: 0,
     password: '',
     confirmPassword: '',
   };
@@ -44,6 +50,11 @@ function createEditDraft(user) {
     role: user.role || 'employee',
     phone: user.phone || '',
     joinDate: user.joinDate || '',
+    casualLeaveTotal: user.casualLeaveTotal ?? 0,
+    sickLeaveTotal: user.sickLeaveTotal ?? 0,
+    earnedLeaveTotal: user.earnedLeaveTotal ?? 0,
+    wfhLeaveTotal: user.wfhLeaveTotal ?? 0,
+    unpaidLeaveTotal: user.unpaidLeaveTotal ?? 0,
     newPassword: '',
     confirmPassword: '',
   };
@@ -97,6 +108,11 @@ export default function AdminPanel() {
         role: form.role,
         phone: form.phone,
         joinDate: form.joinDate,
+        casualLeaveTotal: Number(form.casualLeaveTotal) || 0,
+        sickLeaveTotal: Number(form.sickLeaveTotal) || 0,
+        earnedLeaveTotal: Number(form.earnedLeaveTotal) || 0,
+        wfhLeaveTotal: Number(form.wfhLeaveTotal) || 0,
+        unpaidLeaveTotal: Number(form.unpaidLeaveTotal) || 0,
         password: form.password,
       });
       setForm(createMemberForm());
@@ -123,6 +139,11 @@ export default function AdminPanel() {
         role: editUser.role,
         phone: editUser.phone,
         joinDate: editUser.joinDate,
+        casualLeaveTotal: Number(editUser.casualLeaveTotal) || 0,
+        sickLeaveTotal: Number(editUser.sickLeaveTotal) || 0,
+        earnedLeaveTotal: Number(editUser.earnedLeaveTotal) || 0,
+        wfhLeaveTotal: Number(editUser.wfhLeaveTotal) || 0,
+        unpaidLeaveTotal: Number(editUser.unpaidLeaveTotal) || 0,
         ...(wantsPasswordReset ? { password: editUser.newPassword } : {}),
       });
       setEditUser(null);
@@ -243,6 +264,16 @@ export default function AdminPanel() {
               options={DEPARTMENTS.map(d => ({ value: d, label: d }))} />
             <Input label="Join Date" type="date" value={form.joinDate} onChange={e => setForm(f => ({ ...f, joinDate: e.target.value }))} />
             <div />
+            {LEAVE_TYPE_CONFIG.map((item) => (
+              <Input
+                key={item.balanceKey}
+                label={item.label}
+                type="number"
+                min="0"
+                value={form[item.balanceKey]}
+                onChange={e => setForm(f => ({ ...f, [item.balanceKey]: e.target.value }))}
+              />
+            ))}
             <Input label="Initial Password" type="password" value={form.password}
               onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
               required placeholder="Set a strong password" />
@@ -274,6 +305,16 @@ export default function AdminPanel() {
                 options={DEPARTMENTS.map(d => ({ value: d, label: d }))} />
               <Input label="Join Date" type="date" value={editUser.joinDate} onChange={e => setEditUser(u => ({ ...u, joinDate: e.target.value }))} />
               <div />
+              {LEAVE_TYPE_CONFIG.map((item) => (
+                <Input
+                  key={item.balanceKey}
+                  label={item.label}
+                  type="number"
+                  min="0"
+                  value={editUser[item.balanceKey]}
+                  onChange={e => setEditUser(u => ({ ...u, [item.balanceKey]: e.target.value }))}
+                />
+              ))}
               <Input label="New Password" type="password" value={editUser.newPassword}
                 onChange={e => setEditUser(u => ({ ...u, newPassword: e.target.value }))}
                 placeholder="Leave blank to keep current password" />

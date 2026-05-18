@@ -32,7 +32,7 @@ function parseMemberIds(memberIds) {
 }
 
 function parseChannel(c) {
-  return { ...c, memberIds: parseMemberIds(c.memberIds) };
+  return { ...c, memberIds: parseMemberIds(c.memberIds), emoji: c.emoji || '#' };
 }
 
 function normalizeMessageAttachment(message) {
@@ -121,12 +121,13 @@ router.get('/channels', auth, async (req, res) => {
 // POST /api/channels
 router.post('/channels', auth, async (req, res) => {
   try {
-    const { name, description, memberIds, type } = req.body;
+    const { name, description, memberIds, type, emoji } = req.body;
     const finalMemberIds = Array.from(new Set([...(memberIds || []), req.user.id]));
     const channel = await prisma.channel.create({
       data: {
         name,
         description,
+        emoji: typeof emoji === 'string' && emoji.trim() ? emoji.trim() : '#',
         memberIds: JSON.stringify(finalMemberIds),
         type: type || 'channel',
         createdById: req.user.id,

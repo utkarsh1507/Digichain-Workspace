@@ -27,6 +27,12 @@ function validatePassword(password) {
   return null;
 }
 
+function normalizeLeaveBalance(value) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 0) return 0;
+  return Math.floor(parsed);
+}
+
 // GET /api/users — all users (auth required)
 router.get('/', auth, async (req, res) => {
   try {
@@ -77,7 +83,10 @@ router.get('/:id', auth, async (req, res) => {
 router.post('/', auth, async (req, res) => {
   try {
     if (req.user.role !== 'founder') return res.status(403).json({ error: 'Forbidden' });
-    const { name, email, role, title, department, phone, joinDate, password: pw } = req.body;
+    const {
+      name, email, role, title, department, phone, joinDate, password: pw,
+      casualLeaveTotal, sickLeaveTotal, earnedLeaveTotal, wfhLeaveTotal, unpaidLeaveTotal,
+    } = req.body;
     const passwordError = validatePassword(pw);
     if (passwordError) return res.status(400).json({ error: passwordError });
 
@@ -92,6 +101,11 @@ router.post('/', auth, async (req, res) => {
         department,
         phone: phone?.trim() || null,
         joinDate,
+        casualLeaveTotal: normalizeLeaveBalance(casualLeaveTotal),
+        sickLeaveTotal: normalizeLeaveBalance(sickLeaveTotal),
+        earnedLeaveTotal: normalizeLeaveBalance(earnedLeaveTotal),
+        wfhLeaveTotal: normalizeLeaveBalance(wfhLeaveTotal),
+        unpaidLeaveTotal: normalizeLeaveBalance(unpaidLeaveTotal),
       },
     });
     const { password, ...safeUser } = user;
@@ -125,6 +139,17 @@ router.patch('/:id', auth, async (req, res) => {
     }
     if (data.statusMessage !== undefined) {
       data.statusMessage = data.statusMessage?.trim().slice(0, 80) || null;
+    }
+    if (req.user.role !== 'founder') {
+      delete data.casualLeaveTotal;
+      delete data.sickLeaveTotal;
+      delete data.earnedLeaveTotal;
+      delete data.wfhLeaveTotal;
+      delete data.unpaidLeaveTotal;
+    } else {
+      ['casualLeaveTotal', 'sickLeaveTotal', 'earnedLeaveTotal', 'wfhLeaveTotal', 'unpaidLeaveTotal'].forEach((key) => {
+        if (data[key] !== undefined) data[key] = normalizeLeaveBalance(data[key]);
+      });
     }
     const user = await prisma.user.update({ where: { id: req.params.id }, data });
     const { password: _, ...safeUser } = user;

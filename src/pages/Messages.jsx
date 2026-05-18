@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import { Avatar, IconBtn, Button, Empty, Modal, Input, fmtTime } from '../components/ui';
 import { messagesApi } from '../api/index.js';
 import { getPresence, getStatusText, getUserSubtitle } from '../utils/presence';
+import { CHANNEL_ICON_OPTIONS, getChannelEmoji } from '../constants/workspace.js';
 const URL_REGEX = /(https?:\/\/[^\s]+)/g;
 
 const EMOJIS = ['👍', '❤️', '🔥', '🚀', '✅', '😂', '😮', '👏'];
@@ -21,7 +22,7 @@ export default function Messages() {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [newChannelOpen, setNewChannelOpen] = useState(false);
-  const [channelForm, setChannelForm] = useState({ name: '', description: '', memberIds: [] });
+  const [channelForm, setChannelForm] = useState({ name: '', description: '', emoji: CHANNEL_ICON_OPTIONS[0].value, memberIds: [] });
   const [attachedFile, setAttachedFile] = useState(null);
   const [pickerForMsgId, setPickerForMsgId] = useState(null);
   const [deletingChannel, setDeletingChannel] = useState(false);
@@ -248,11 +249,12 @@ export default function Messages() {
       const ch = await createChannel({
         name: `#${channelForm.name.replace(/^#+/, '')}`,
         description: channelForm.description,
+        emoji: channelForm.emoji,
         memberIds,
         type: 'channel',
       });
       setNewChannelOpen(false);
-      setChannelForm({ name: '', description: '', memberIds: [] });
+      setChannelForm({ name: '', description: '', emoji: CHANNEL_ICON_OPTIONS[0].value, memberIds: [] });
       setActiveId(ch.id);
     } catch (err) { alert(err.message); }
   }
@@ -395,7 +397,7 @@ export default function Messages() {
                     </button>
                   : <span style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--accent-tint)', display: 'inline-flex',
                       alignItems: 'center', justifyContent: 'center', color: 'var(--accent)', fontWeight: 700 }}>
-                      <Hash size={15} />
+                      {getChannelEmoji(active)}
                     </span>}
                 <div>
                   <div
@@ -735,6 +737,34 @@ export default function Messages() {
             onChange={e => setChannelForm(f => ({ ...f, description: e.target.value }))}
             placeholder="What's this channel for?" />
           <div>
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', display: 'block', marginBottom: 8 }}>Channel icon</span>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 8 }}>
+              {CHANNEL_ICON_OPTIONS.map((option) => {
+                const isActive = channelForm.emoji === option.value;
+                return (
+                  <button
+                    key={option.value}
+                    type="button"
+                    onClick={() => setChannelForm((f) => ({ ...f, emoji: option.value }))}
+                    style={{
+                      border: isActive ? '1px solid var(--accent)' : '1px solid var(--border-1)',
+                      background: isActive ? 'var(--accent-tint)' : '#fff',
+                      borderRadius: 12,
+                      padding: '10px 8px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}>
+                    <span style={{ fontSize: 20, lineHeight: 1 }}>{option.value}</span>
+                    <span style={{ fontSize: 11, color: isActive ? 'var(--accent-press)' : 'var(--fg-3)' }}>{option.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+          <div>
             <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', display: 'block', marginBottom: 8 }}>Add Members</span>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 200, overflowY: 'auto' }}>
               {users.map(u => (
@@ -776,7 +806,7 @@ function ConvItem({ conv, active, name, last, unread, onClick, avatar, user }) {
         : <span style={{ width: 30, height: 30, borderRadius: 8, background: active ? 'var(--accent-tint)' : 'var(--bg-2)',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
             color: active ? 'var(--accent)' : 'var(--fg-3)', fontWeight: 700, flexShrink: 0 }}>
-            <Hash size={13} />
+            {getChannelEmoji(conv)}
           </span>}
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 13, fontWeight: unread > 0 ? 700 : (active ? 700 : 500), color: 'var(--fg-1)',

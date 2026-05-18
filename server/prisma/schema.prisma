@@ -19,6 +19,11 @@ model User {
   bio        String?
   joinDate   String?
   avatar     String?
+  casualLeaveTotal Int @default(0)
+  sickLeaveTotal   Int @default(0)
+  earnedLeaveTotal Int @default(0)
+  wfhLeaveTotal    Int @default(0)
+  unpaidLeaveTotal Int @default(0)
   statusPreset  String   @default("working")
   statusMessage String?
   lastActiveAt  DateTime @default(now())
@@ -98,6 +103,7 @@ model Channel {
   id          String    @id @default(cuid())
   name        String
   type        String    @default("channel")
+  emoji       String?   @default("#")
   description String?
   memberIds   String
   createdById String?
