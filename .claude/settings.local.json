@@ -32,7 +32,20 @@
       "Bash(node -e \"let d='';process.stdin.on\\('data',c=>d+=c\\);process.stdin.on\\('end',\\(\\)=>{const ch=JSON.parse\\(d\\);console.log\\('Channels:',ch.length,'memberIds type:',typeof ch[0]?.memberIds\\)}\\)\")",
       "Bash(del \"C:\\\\Users\\\\UTKARSH\\\\Downloads\\\\digichain-employee\\\\server\\\\prisma\\\\dev.db\")",
       "PowerShell(Set-Location \"C:\\\\Users\\\\UTKARSH\\\\Downloads\\\\digichain-employee\\\\server\"; Start-Process -NoNewWindow -FilePath \"node\" -ArgumentList \"src/index.js\" -RedirectStandardOutput \"server.log\" -RedirectStandardError \"server-err.log\"; Start-Sleep -Seconds 3; $h = Invoke-WebRequest -Uri \"http://localhost:3001/api/health\" -UseBasicParsing; Write-Host \"Health:\" $h.Content)",
-      "PowerShell($login = Invoke-WebRequest -Uri \"http://localhost:3001/api/auth/login\" -Method POST -ContentType \"application/json\" -Body '{\"email\":\"utkarsh@digichainpi.com\",\"password\":\"1234\"}' -UseBasicParsing | ConvertFrom-Json; $token = $login.token; Write-Host \"Login OK, user:\" $login.user.name; $channels = Invoke-WebRequest -Uri \"http://localhost:3001/api/channels\" -Headers @{Authorization=\"Bearer $token\"} -UseBasicParsing | ConvertFrom-Json; Write-Host \"Channels:\" $channels.Count \"| First memberIds type:\" \\($channels[0].memberIds.GetType\\(\\).Name\\); $unread = Invoke-WebRequest -Uri \"http://localhost:3001/api/channels/unread\" -Headers @{Authorization=\"Bearer $token\"} -UseBasicParsing; Write-Host \"Unread response:\" $unread.Content.Substring\\(0, [Math]::Min\\(200, $unread.Content.Length\\)\\))"
+      "PowerShell($login = Invoke-WebRequest -Uri \"http://localhost:3001/api/auth/login\" -Method POST -ContentType \"application/json\" -Body '{\"email\":\"utkarsh@digichainpi.com\",\"password\":\"1234\"}' -UseBasicParsing | ConvertFrom-Json; $token = $login.token; Write-Host \"Login OK, user:\" $login.user.name; $channels = Invoke-WebRequest -Uri \"http://localhost:3001/api/channels\" -Headers @{Authorization=\"Bearer $token\"} -UseBasicParsing | ConvertFrom-Json; Write-Host \"Channels:\" $channels.Count \"| First memberIds type:\" \\($channels[0].memberIds.GetType\\(\\).Name\\); $unread = Invoke-WebRequest -Uri \"http://localhost:3001/api/channels/unread\" -Headers @{Authorization=\"Bearer $token\"} -UseBasicParsing; Write-Host \"Unread response:\" $unread.Content.Substring\\(0, [Math]::Min\\(200, $unread.Content.Length\\)\\))",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/multer-storage-cloudinary/package.json'\\).version\\)\")",
+      "Bash(node -e \"console.log\\(require\\('./node_modules/cloudinary/package.json'\\).version\\)\")",
+      "PowerShell(Write-Output \"GIT_DIR=$env:GIT_DIR\"; Write-Output \"GIT_WORK_TREE=$env:GIT_WORK_TREE\"; Write-Output \"GIT_COMMON_DIR=$env:GIT_COMMON_DIR\"; [Environment]::GetEnvironmentVariable\\(\"GIT_DIR\",\"User\"\\); [Environment]::GetEnvironmentVariable\\(\"GIT_DIR\",\"Machine\"\\))",
+      "Bash(git -C \"E:/digichain-employee\" status --porcelain=v1 --ignored=no -- .claude)",
+      "Bash(git -C \"E:/digichain-employee\" add .)",
+      "Bash(git -C \"E:/digichain-employee\" status --short)",
+      "Bash(git -C \"E:/digichain-employee\" status)",
+      "Bash(git -C \"E:/digichain-employee\" rev-parse --abbrev-ref --symbolic-full-name @{u})",
+      "Bash(git -C \"E:/digichain-employee\" diff --staged -- .claude/settings.local.json)",
+      "Bash(git -C \"E:/digichain-employee\" diff -- .claude/settings.local.json)",
+      "Bash(git -C \"E:/digichain-employee\" log --oneline -5)",
+      "Bash(git -C \"E:/digichain-employee\" add -A -- .claude/settings.local.json server/src/routes/documents.js server/src/routes/messages.js .gitignore .claude/worktrees)",
+      "Bash(git -C \"E:/digichain-employee\" add -- .claude/settings.local.json server/src/routes/documents.js server/src/routes/messages.js .gitignore)"
     ]
   }
 }

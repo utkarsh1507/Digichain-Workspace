@@ -76,7 +76,7 @@ router.get('/:id/download', auth, async (req, res) => {
 
     if (!doc.url) return res.status(404).json({ error: 'File URL missing' });
 
-    const downloadUrl = getSignedDownloadUrl(doc.url, doc.name, {
+    const downloadUrl = getSignedDownloadUrl(normalizeStoredFileUrl(doc.url, doc.name), doc.name, {
       attachmentName: doc.name,
     });
 

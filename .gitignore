@@ -1,5 +1,6 @@
 node_modules/
 server/node_modules/
+.claude/worktrees/
 server/prisma/dev.db
 server/uploads/
 dist/

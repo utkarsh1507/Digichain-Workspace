@@ -329,7 +329,7 @@ router.get('/channels/:channelId/messages/:messageId/attachment', auth, async (r
       return res.status(404).json({ error: 'Attachment not found' });
     }
 
-    const downloadUrl = getSignedDownloadUrl(msg.attachmentUrl, msg.attachmentName, {
+    const downloadUrl = getSignedDownloadUrl(normalizeStoredFileUrl(msg.attachmentUrl, msg.attachmentName), msg.attachmentName, {
       attachmentName: msg.attachmentName,
     });
 
